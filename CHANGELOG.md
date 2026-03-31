@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.11.0...zig-v0.12.0) (2026-03-31)
+
+
+### Features
+
+* **zig/renderer:** drive the real terminal cursor ([ea3c9ec](https://github.com/stussysenik/bubbletea/commit/ea3c9ec8b985ae9b199d2d18d9adc6c5704bfb65))
+
 # [0.11.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.10.0...zig-v0.11.0) (2026-03-31)
 
 
