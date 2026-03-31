@@ -1,3 +1,11 @@
+# [0.9.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.8.0...zig-v0.9.0) (2026-03-31)
+
+
+### Features
+
+* **zig/web:** add item-targeted browser actions ([857673c](https://github.com/stussysenik/bubbletea/commit/857673cb86f9728b13e69fdd34d34ff71a17643d))
+* **zig/web:** add region-aware browser focus targeting ([205f059](https://github.com/stussysenik/bubbletea/commit/205f059d3860ee2130d3827b78ba17727987f8c7))
+
 # [0.8.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.7.0...zig-v0.8.0) (2026-03-31)
 
 
