@@ -33,7 +33,7 @@ To get started, see the tutorial below, the [examples][examples], the
 
 <!-- zig-rewrite:start -->
 - Status: `active`
-- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes editable, tabular, and form-driven UI primitives on top of a shared composable tree.
+- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input plus editable, tabular, and form-driven UI primitives on top of a shared composable tree.
 - Progress Board: 6 done, 2 in progress, 1 planned
 - Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md)
 - Default Verification: `cd zig && zig build`, `cd zig && zig build test`, `cd zig && zig build wasm`

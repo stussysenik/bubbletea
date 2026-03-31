@@ -54,11 +54,59 @@ pub const Key = union(enum) {
     }
 };
 
-/// Buffered decoder that can absorb partial reads and emit one logical key at
-/// a time.
+/// Mouse buttons normalized from SGR reporting.
+pub const MouseButton = enum {
+    none,
+    left,
+    middle,
+    right,
+    wheel_up,
+    wheel_down,
+    wheel_left,
+    wheel_right,
+};
+
+/// Mouse actions normalized from terminal escape sequences.
+pub const MouseAction = enum {
+    press,
+    release,
+    drag,
+    move,
+    scroll,
+};
+
+/// Keyboard modifiers attached to terminal mouse events.
+pub const MouseModifiers = struct {
+    shift: bool = false,
+    alt: bool = false,
+    ctrl: bool = false,
+};
+
+/// Mouse position and metadata as reported by the terminal host.
+pub const MouseEvent = struct {
+    x: u16,
+    y: u16,
+    button: MouseButton,
+    action: MouseAction,
+    modifiers: MouseModifiers = .{},
+};
+
+/// Higher-level input event emitted by the decoder.
+pub const Event = union(enum) {
+    key: Key,
+    paste: []const u8,
+    focus_gained,
+    focus_lost,
+    mouse: MouseEvent,
+};
+
+/// Buffered decoder that can absorb partial reads and emit one logical event
+/// at a time.
 pub const Decoder = struct {
     allocator: std.mem.Allocator,
     pending: std.ArrayList(u8) = .empty,
+    in_paste: bool = false,
+    ready_paste_len: ?usize = null,
 
     pub fn init(allocator: std.mem.Allocator) Decoder {
         return .{ .allocator = allocator };
@@ -74,49 +122,116 @@ pub const Decoder = struct {
         try self.pending.appendSlice(self.allocator, bytes);
     }
 
-    /// Returns the next decoded key when enough bytes are buffered.
-    pub fn next(self: *Decoder) ?Key {
-        switch (parseOne(self.pending.items)) {
-            .none, .pending => return null,
-            .key => |decoded| {
-                self.consume(decoded.consumed);
-                return decoded.value;
-            },
-        }
-    }
+    /// Returns the next decoded event when enough bytes are buffered.
+    ///
+    /// Paste payload slices remain valid until the next decoder mutation call.
+    pub fn nextEvent(self: *Decoder) ?Event {
+        self.finishReadyPaste();
 
-    /// Forces any partial sequence to resolve as a standalone key when the
-    /// host has gone idle.
-    pub fn flush(self: *Decoder) ?Key {
-        if (self.pending.items.len == 0) return null;
-
-        switch (parseOne(self.pending.items)) {
-            .none => return null,
-            .key => |decoded| {
-                self.consume(decoded.consumed);
-                return decoded.value;
-            },
-            .pending => {
-                const first = self.pending.items[0];
-                const key: Key = switch (first) {
-                    0x1B => .escape,
-                    else => .{ .unknown = first },
-                };
-
-                if (first == 0x1B and self.pending.items.len > 1 and (self.pending.items[1] == '[' or self.pending.items[1] == 'O')) {
-                    self.pending.clearRetainingCapacity();
-                } else {
-                    self.consume(1);
+        while (true) {
+            if (self.in_paste) {
+                if (std.mem.indexOf(u8, self.pending.items, paste_end_sequence)) |index| {
+                    self.in_paste = false;
+                    self.ready_paste_len = index;
+                    return .{ .paste = self.pending.items[0..index] };
                 }
+                return null;
+            }
 
-                return key;
-            },
+            switch (parseOne(self.pending.items)) {
+                .none, .pending => return null,
+                .item => |decoded| {
+                    self.consume(decoded.consumed);
+                    switch (decoded.value) {
+                        .event => |event| return event,
+                        .paste_start => {
+                            self.in_paste = true;
+                            continue;
+                        },
+                    }
+                },
+            }
         }
     }
 
-    /// Reports whether undecoded bytes are still buffered.
+    /// Forces any partial non-paste sequence to resolve when the host has
+    /// gone idle.
+    pub fn flushEvent(self: *Decoder) ?Event {
+        self.finishReadyPaste();
+
+        while (true) {
+            if (self.in_paste) {
+                if (std.mem.indexOf(u8, self.pending.items, paste_end_sequence)) |index| {
+                    self.in_paste = false;
+                    self.ready_paste_len = index;
+                    return .{ .paste = self.pending.items[0..index] };
+                }
+                return null;
+            }
+
+            if (self.pending.items.len == 0) return null;
+
+            switch (parseOne(self.pending.items)) {
+                .none => return null,
+                .item => |decoded| {
+                    self.consume(decoded.consumed);
+                    switch (decoded.value) {
+                        .event => |event| return event,
+                        .paste_start => {
+                            self.in_paste = true;
+                            continue;
+                        },
+                    }
+                },
+                .pending => {
+                    const first = self.pending.items[0];
+                    const event: Event = switch (first) {
+                        0x1B => .{ .key = .escape },
+                        else => .{ .key = .{ .unknown = first } },
+                    };
+
+                    if (first == 0x1B and self.pending.items.len > 1 and (self.pending.items[1] == '[' or self.pending.items[1] == 'O')) {
+                        self.pending.clearRetainingCapacity();
+                    } else {
+                        self.consume(1);
+                    }
+
+                    return event;
+                },
+            }
+        }
+    }
+
+    /// Compatibility helper for legacy key-only callers.
+    pub fn next(self: *Decoder) ?Key {
+        while (self.nextEvent()) |event| {
+            switch (event) {
+                .key => |key| return key,
+                else => continue,
+            }
+        }
+        return null;
+    }
+
+    /// Compatibility helper for legacy key-only callers.
+    pub fn flush(self: *Decoder) ?Key {
+        const event = self.flushEvent() orelse return null;
+        return switch (event) {
+            .key => |key| key,
+            else => null,
+        };
+    }
+
+    /// Reports whether undecoded bytes or an open paste block are buffered.
     pub fn hasPending(self: *const Decoder) bool {
-        return self.pending.items.len != 0;
+        return self.pending.items.len != 0 or self.in_paste or self.ready_paste_len != null;
+    }
+
+    // Removes bytes whose paste payload was already handed to the caller.
+    fn finishReadyPaste(self: *Decoder) void {
+        const payload_len = self.ready_paste_len orelse return;
+        self.consume(payload_len + paste_end_sequence.len);
+        self.ready_paste_len = null;
     }
 
     // Removes decoded bytes while keeping the backing allocation.
@@ -136,34 +251,46 @@ pub const Decoder = struct {
 /// Convenience one-shot parser used by tests and simple callers.
 pub fn parse(bytes: []const u8) ?Key {
     return switch (parseOne(bytes)) {
-        .key => |decoded| decoded.value,
+        .item => |decoded| switch (decoded.value) {
+            .event => |event| switch (event) {
+                .key => |key| key,
+                else => null,
+            },
+            .paste_start => null,
+        },
         .none, .pending => null,
     };
 }
 
 // Internal result for a single decode attempt.
-const DecodedKey = struct {
-    value: Key,
+const DecodedItem = struct {
+    value: ParsedItem,
     consumed: usize,
 };
 
-// Distinguishes between "no data", "need more bytes", and "decoded key".
+// Parser-level token used before the runtime turns it into a message.
+const ParsedItem = union(enum) {
+    event: Event,
+    paste_start,
+};
+
+// Distinguishes between "no data", "need more bytes", and "decoded item".
 const DecodeState = union(enum) {
     none,
     pending,
-    key: DecodedKey,
+    item: DecodedItem,
 };
 
-// Decodes the first logical key available in a byte slice.
+// Decodes the first logical token available in a byte slice.
 fn parseOne(bytes: []const u8) DecodeState {
     if (bytes.len == 0) return .none;
 
     return switch (bytes[0]) {
-        0x03 => .{ .key = .{ .value = .ctrl_c, .consumed = 1 } },
-        0x1A => .{ .key = .{ .value = .ctrl_z, .consumed = 1 } },
-        '\r', '\n' => .{ .key = .{ .value = .enter, .consumed = 1 } },
-        '\t' => .{ .key = .{ .value = .tab, .consumed = 1 } },
-        0x7F => .{ .key = .{ .value = .backspace, .consumed = 1 } },
+        0x03 => .{ .item = .{ .value = .{ .event = .{ .key = .ctrl_c } }, .consumed = 1 } },
+        0x1A => .{ .item = .{ .value = .{ .event = .{ .key = .ctrl_z } }, .consumed = 1 } },
+        '\r', '\n' => .{ .item = .{ .value = .{ .event = .{ .key = .enter } }, .consumed = 1 } },
+        '\t' => .{ .item = .{ .value = .{ .event = .{ .key = .tab } }, .consumed = 1 } },
+        0x7F => .{ .item = .{ .value = .{ .event = .{ .key = .backspace } }, .consumed = 1 } },
         0x1B => parseEscape(bytes),
         else => parsePrintable(bytes),
     };
@@ -177,11 +304,11 @@ fn parseEscape(bytes: []const u8) DecodeState {
     return switch (bytes[1]) {
         '[' => parseCsi(bytes),
         'O' => parseSs3(bytes),
-        else => .{ .key = .{ .value = .escape, .consumed = 1 } },
+        else => .{ .item = .{ .value = .{ .event = .{ .key = .escape } }, .consumed = 1 } },
     };
 }
 
-// Parses CSI sequences such as arrows, home/end, and delete.
+// Parses CSI sequences such as arrows, home/end, mouse, focus, and paste.
 fn parseCsi(bytes: []const u8) DecodeState {
     if (bytes.len < 3) return .pending;
 
@@ -195,34 +322,96 @@ fn parseCsi(bytes: []const u8) DecodeState {
     const consumed = 2 + final_index + 1;
 
     return switch (final) {
-        'A' => .{ .key = .{ .value = .up, .consumed = consumed } },
-        'B' => .{ .key = .{ .value = .down, .consumed = consumed } },
-        'C' => .{ .key = .{ .value = .right, .consumed = consumed } },
-        'D' => .{ .key = .{ .value = .left, .consumed = consumed } },
-        'F' => .{ .key = .{ .value = .end, .consumed = consumed } },
-        'H' => .{ .key = .{ .value = .home, .consumed = consumed } },
-        'Z' => .{ .key = .{ .value = .shift_tab, .consumed = consumed } },
+        'A' => keyItem(.up, consumed),
+        'B' => keyItem(.down, consumed),
+        'C' => keyItem(.right, consumed),
+        'D' => keyItem(.left, consumed),
+        'F' => keyItem(.end, consumed),
+        'H' => keyItem(.home, consumed),
+        'I' => .{ .item = .{ .value = .{ .event = .focus_gained }, .consumed = consumed } },
+        'O' => .{ .item = .{ .value = .{ .event = .focus_lost }, .consumed = consumed } },
+        'Z' => keyItem(.shift_tab, consumed),
+        'M', 'm' => parseCsiMouse(params, final, consumed),
         '~' => parseCsiTilde(params, consumed),
-        else => .{ .key = .{ .value = .{ .unknown = final }, .consumed = consumed } },
+        else => keyItem(.{ .unknown = final }, consumed),
     };
 }
 
-// Handles `CSI <n> ~` style navigation keys.
+// Handles `CSI <n> ~` style navigation keys and bracketed paste markers.
 fn parseCsiTilde(params: []const u8, consumed: usize) DecodeState {
     const primary = parsePrimaryParam(params) orelse {
-        return .{ .key = .{ .value = .{ .unknown = '~' }, .consumed = consumed } };
+        return keyItem(.{ .unknown = '~' }, consumed);
     };
 
-    const key: Key = switch (primary) {
-        1, 7 => .home,
-        3 => .delete,
-        4, 8 => .end,
-        5 => .page_up,
-        6 => .page_down,
-        else => .{ .unknown = '~' },
+    return switch (primary) {
+        1, 7 => keyItem(.home, consumed),
+        3 => keyItem(.delete, consumed),
+        4, 8 => keyItem(.end, consumed),
+        5 => keyItem(.page_up, consumed),
+        6 => keyItem(.page_down, consumed),
+        200 => .{ .item = .{ .value = .paste_start, .consumed = consumed } },
+        else => keyItem(.{ .unknown = '~' }, consumed),
+    };
+}
+
+// Parses SGR mouse reporting of the form `CSI <Cb;Cx;Cy M` or `m`.
+fn parseCsiMouse(params: []const u8, final: u8, consumed: usize) DecodeState {
+    if (params.len == 0 or params[0] != '<') {
+        return keyItem(.{ .unknown = final }, consumed);
+    }
+
+    var parts = std.mem.splitScalar(u8, params[1..], ';');
+    const code_text = parts.next() orelse return keyItem(.{ .unknown = final }, consumed);
+    const x_text = parts.next() orelse return keyItem(.{ .unknown = final }, consumed);
+    const y_text = parts.next() orelse return keyItem(.{ .unknown = final }, consumed);
+
+    const code = std.fmt.parseInt(u16, code_text, 10) catch return keyItem(.{ .unknown = final }, consumed);
+    const x = std.fmt.parseInt(u16, x_text, 10) catch return keyItem(.{ .unknown = final }, consumed);
+    const y = std.fmt.parseInt(u16, y_text, 10) catch return keyItem(.{ .unknown = final }, consumed);
+
+    const modifiers: MouseModifiers = .{
+        .shift = (code & 4) != 0,
+        .alt = (code & 8) != 0,
+        .ctrl = (code & 16) != 0,
+    };
+    const button_code = code & 3;
+    const is_motion = (code & 32) != 0;
+    const is_wheel = (code & 64) != 0;
+
+    var event = MouseEvent{
+        .x = if (x > 0) x - 1 else 0,
+        .y = if (y > 0) y - 1 else 0,
+        .button = .none,
+        .action = .press,
+        .modifiers = modifiers,
     };
 
-    return .{ .key = .{ .value = key, .consumed = consumed } };
+    if (is_wheel) {
+        event.action = .scroll;
+        event.button = switch (button_code) {
+            0 => .wheel_up,
+            1 => .wheel_down,
+            2 => .wheel_left,
+            3 => .wheel_right,
+            else => .none,
+        };
+    } else if (final == 'm') {
+        event.action = .release;
+        event.button = decodePointerButton(button_code);
+    } else if (is_motion) {
+        event.action = if (button_code == 3) .move else .drag;
+        event.button = decodePointerButton(button_code);
+    } else {
+        event.action = .press;
+        event.button = decodePointerButton(button_code);
+    }
+
+    return .{
+        .item = .{
+            .value = .{ .event = .{ .mouse = event } },
+            .consumed = consumed,
+        },
+    };
 }
 
 // Handles SS3 cursor-key sequences emitted by some terminals.
@@ -230,13 +419,13 @@ fn parseSs3(bytes: []const u8) DecodeState {
     if (bytes.len < 3) return .pending;
 
     return switch (bytes[2]) {
-        'A' => .{ .key = .{ .value = .up, .consumed = 3 } },
-        'B' => .{ .key = .{ .value = .down, .consumed = 3 } },
-        'C' => .{ .key = .{ .value = .right, .consumed = 3 } },
-        'D' => .{ .key = .{ .value = .left, .consumed = 3 } },
-        'F' => .{ .key = .{ .value = .end, .consumed = 3 } },
-        'H' => .{ .key = .{ .value = .home, .consumed = 3 } },
-        else => |value| .{ .key = .{ .value = .{ .unknown = value }, .consumed = 3 } },
+        'A' => keyItem(.up, 3),
+        'B' => keyItem(.down, 3),
+        'C' => keyItem(.right, 3),
+        'D' => keyItem(.left, 3),
+        'F' => keyItem(.end, 3),
+        'H' => keyItem(.home, 3),
+        else => |value| keyItem(.{ .unknown = value }, 3),
     };
 }
 
@@ -244,19 +433,39 @@ fn parseSs3(bytes: []const u8) DecodeState {
 fn parsePrintable(bytes: []const u8) DecodeState {
     const first = bytes[0];
     if (first >= 0x20 and first < 0x7F) {
-        return .{ .key = .{ .value = .{ .character = first }, .consumed = 1 } };
+        return keyItem(.{ .character = first }, 1);
     }
 
     const sequence_len = std.unicode.utf8ByteSequenceLength(first) catch {
-        return .{ .key = .{ .value = .{ .unknown = first }, .consumed = 1 } };
+        return keyItem(.{ .unknown = first }, 1);
     };
     if (bytes.len < sequence_len) return .pending;
 
     const codepoint = std.unicode.utf8Decode(bytes[0..sequence_len]) catch {
-        return .{ .key = .{ .value = .{ .unknown = first }, .consumed = 1 } };
+        return keyItem(.{ .unknown = first }, 1);
     };
 
-    return .{ .key = .{ .value = .{ .character = codepoint }, .consumed = sequence_len } };
+    return keyItem(.{ .character = codepoint }, sequence_len);
+}
+
+// Creates a decode item for key events.
+fn keyItem(key: Key, consumed: usize) DecodeState {
+    return .{
+        .item = .{
+            .value = .{ .event = .{ .key = key } },
+            .consumed = consumed,
+        },
+    };
+}
+
+// Pointer-button decoding for SGR mouse reports.
+fn decodePointerButton(code: u16) MouseButton {
+    return switch (code) {
+        0 => .left,
+        1 => .middle,
+        2 => .right,
+        else => .none,
+    };
 }
 
 // Only the first numeric parameter is currently needed for navigation keys.
@@ -280,6 +489,9 @@ fn parsePrimaryParam(params: []const u8) ?usize {
 fn isFinalByte(byte: u8) bool {
     return byte >= 0x40 and byte <= 0x7E;
 }
+
+// Terminal control sequence that ends bracketed paste mode payloads.
+const paste_end_sequence = "\x1b[201~";
 
 test "parses navigation keys and ascii" {
     try std.testing.expectEqualDeep(Key.up, parse("\x1b[A").?);
@@ -331,4 +543,60 @@ test "decoder buffers split utf8" {
     try std.testing.expect(decoder.next() == null);
     try decoder.feed(e_acute[1..2]);
     try std.testing.expect(decoder.next().?.isCharacter('é'));
+}
+
+test "decoder emits focus events" {
+    var decoder = Decoder.init(std.testing.allocator);
+    defer decoder.deinit();
+
+    try decoder.feed("\x1b[I\x1b[O");
+    try std.testing.expectEqualDeep(Event.focus_gained, decoder.nextEvent().?);
+    try std.testing.expectEqualDeep(Event.focus_lost, decoder.nextEvent().?);
+    try std.testing.expect(decoder.nextEvent() == null);
+}
+
+test "decoder buffers bracketed paste until terminator" {
+    var decoder = Decoder.init(std.testing.allocator);
+    defer decoder.deinit();
+
+    try decoder.feed("\x1b[200~bubble");
+    try std.testing.expect(decoder.nextEvent() == null);
+    try decoder.feed("tea-zig\x1b[201~");
+
+    const event = decoder.nextEvent().?;
+    switch (event) {
+        .paste => |text| try std.testing.expectEqualStrings("bubbletea-zig", text),
+        else => return error.UnexpectedEvent,
+    }
+
+    try std.testing.expect(decoder.nextEvent() == null);
+}
+
+test "decoder parses sgr mouse press and scroll events" {
+    var decoder = Decoder.init(std.testing.allocator);
+    defer decoder.deinit();
+
+    try decoder.feed("\x1b[<0;5;7M\x1b[<65;5;8M");
+
+    const press = decoder.nextEvent().?;
+    switch (press) {
+        .mouse => |mouse| {
+            try std.testing.expectEqual(MouseAction.press, mouse.action);
+            try std.testing.expectEqual(MouseButton.left, mouse.button);
+            try std.testing.expectEqual(@as(u16, 4), mouse.x);
+            try std.testing.expectEqual(@as(u16, 6), mouse.y);
+        },
+        else => return error.UnexpectedEvent,
+    }
+
+    const scroll = decoder.nextEvent().?;
+    switch (scroll) {
+        .mouse => |mouse| {
+            try std.testing.expectEqual(MouseAction.scroll, mouse.action);
+            try std.testing.expectEqual(MouseButton.wheel_down, mouse.button);
+            try std.testing.expectEqual(@as(u16, 4), mouse.x);
+            try std.testing.expectEqual(@as(u16, 7), mouse.y);
+        },
+        else => return error.UnexpectedEvent,
+    }
 }

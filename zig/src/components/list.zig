@@ -57,6 +57,17 @@ pub const List = struct {
         }
     }
 
+    /// Applies wheel events without requiring the caller to map them to keys.
+    pub fn updateMouse(self: *List, mouse: tea.MouseEvent) bool {
+        if (mouse.action != .scroll) return false;
+
+        return switch (mouse.button) {
+            .wheel_up => self.update(.up),
+            .wheel_down => self.update(.down),
+            else => false,
+        };
+    }
+
     /// Returns the currently selected item when the list is non-empty.
     pub fn selectedItem(self: *const List) ?[]const u8 {
         if (self.items.len == 0) return null;
@@ -111,4 +122,24 @@ test "list navigation stays in bounds" {
     try std.testing.expect(!list.update(.down));
     try std.testing.expect(list.update(.up));
     try std.testing.expectEqual(@as(usize, 1), list.selected);
+}
+
+test "list reacts to mouse wheel navigation" {
+    const items = [_][]const u8{ "one", "two", "three" };
+    var list = List.init(&items);
+
+    try std.testing.expect(list.updateMouse(.{
+        .x = 0,
+        .y = 0,
+        .button = .wheel_down,
+        .action = .scroll,
+    }));
+    try std.testing.expectEqual(@as(usize, 1), list.selected);
+    try std.testing.expect(list.updateMouse(.{
+        .x = 0,
+        .y = 0,
+        .button = .wheel_up,
+        .action = .scroll,
+    }));
+    try std.testing.expectEqual(@as(usize, 0), list.selected);
 }

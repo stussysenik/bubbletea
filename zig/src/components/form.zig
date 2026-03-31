@@ -103,6 +103,12 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             return self.inputs[index].update(key);
         }
 
+        /// Inserts pasted UTF-8 text into the currently focused field.
+        pub fn paste(self: *Self, text: []const u8) bool {
+            const index = self.focus.current() orelse return false;
+            return self.inputs[index].insertText(text);
+        }
+
         /// Plain text fallback for headless or minimal hosts.
         pub fn view(self: *const Self, writer: anytype) !void {
             if (field_count == 0) {
@@ -216,4 +222,18 @@ test "form compose includes labels and help text" {
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "Draft App") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "Name") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "tab moves between fields") != null);
+}
+
+test "form pastes into the focused field" {
+    const DemoForm = Form(2, 32);
+    var form = DemoForm.init(.{
+        .{ .id = "name", .label = "Name" },
+        .{ .id = "cmd", .label = "Command" },
+    }, .{});
+
+    try std.testing.expect(form.paste("zig"));
+    try std.testing.expectEqualStrings("zig", form.valueById("name").?);
+    try std.testing.expect(form.update(.tab));
+    try std.testing.expect(form.paste("build run"));
+    try std.testing.expectEqualStrings("build run", form.valueById("cmd").?);
 }

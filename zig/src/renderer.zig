@@ -5,6 +5,17 @@ pub const Options = struct {
     alt_screen: bool = true,
     hide_cursor: bool = true,
     ansi_enabled: bool = true,
+    bracketed_paste: bool = true,
+    focus_reporting: bool = true,
+    mouse_mode: MouseMode = .none,
+};
+
+/// Terminal mouse tracking mode to enable before the event loop starts.
+pub const MouseMode = enum {
+    none,
+    click,
+    drag,
+    motion,
 };
 
 /// Minimal line-diff renderer that only rewrites rows whose text changed.
@@ -43,6 +54,18 @@ pub const Renderer = struct {
         if (self.options.hide_cursor) {
             try buffer.appendSlice(self.allocator, "\x1b[?25l");
         }
+        if (self.options.bracketed_paste) {
+            try buffer.appendSlice(self.allocator, "\x1b[?2004h");
+        }
+        if (self.options.focus_reporting) {
+            try buffer.appendSlice(self.allocator, "\x1b[?1004h");
+        }
+        switch (self.options.mouse_mode) {
+            .none => {},
+            .click => try buffer.appendSlice(self.allocator, "\x1b[?1000h\x1b[?1006h"),
+            .drag => try buffer.appendSlice(self.allocator, "\x1b[?1002h\x1b[?1006h"),
+            .motion => try buffer.appendSlice(self.allocator, "\x1b[?1003h\x1b[?1006h"),
+        }
         try buffer.appendSlice(self.allocator, "\x1b[2J\x1b[H");
 
         try self.stdout.writeAll(buffer.items);
@@ -60,6 +83,18 @@ pub const Renderer = struct {
         defer buffer.deinit(self.allocator);
 
         try buffer.appendSlice(self.allocator, "\x1b[0m");
+        switch (self.options.mouse_mode) {
+            .none => {},
+            .click => try buffer.appendSlice(self.allocator, "\x1b[?1000l\x1b[?1006l"),
+            .drag => try buffer.appendSlice(self.allocator, "\x1b[?1002l\x1b[?1006l"),
+            .motion => try buffer.appendSlice(self.allocator, "\x1b[?1003l\x1b[?1006l"),
+        }
+        if (self.options.focus_reporting) {
+            try buffer.appendSlice(self.allocator, "\x1b[?1004l");
+        }
+        if (self.options.bracketed_paste) {
+            try buffer.appendSlice(self.allocator, "\x1b[?2004l");
+        }
         if (self.options.hide_cursor) {
             try buffer.appendSlice(self.allocator, "\x1b[?25h");
         }

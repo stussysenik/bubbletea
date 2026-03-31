@@ -63,6 +63,7 @@ pub fn App(comptime Msg: type) type {
         visible_rows: [roadmap_rows.len][]const []const u8 = undefined,
         visible_len: usize = 0,
         size: tea.Size = .{},
+        terminal_focused: bool = true,
 
         const Self = @This();
 
@@ -113,6 +114,40 @@ pub fn App(comptime Msg: type) type {
                         else => return tea.Update(Msg).noop(),
                     }
                 },
+                .paste => |text| {
+                    switch (self.focus.current() orelse zone_filter) {
+                        zone_filter => {
+                            if (self.filter.insertText(text)) {
+                                self.rebuildVisible();
+                                return .{};
+                            }
+                            return tea.Update(Msg).noop();
+                        },
+                        zone_form => {
+                            if (self.draft.paste(text)) {
+                                return .{};
+                            }
+                            return tea.Update(Msg).noop();
+                        },
+                        else => return tea.Update(Msg).noop(),
+                    }
+                },
+                .focus_gained => {
+                    if (self.terminal_focused) return tea.Update(Msg).noop();
+                    self.terminal_focused = true;
+                    return .{};
+                },
+                .focus_lost => {
+                    if (!self.terminal_focused) return tea.Update(Msg).noop();
+                    self.terminal_focused = false;
+                    return .{};
+                },
+                .mouse => |mouse| {
+                    if ((self.focus.current() orelse zone_filter) == zone_list and self.list.updateMouse(mouse)) {
+                        return .{};
+                    }
+                    return tea.Update(Msg).noop();
+                },
                 .resize => |size| {
                     // Resize state is currently informational, but later layout
                     // work can consume it directly.
@@ -159,9 +194,13 @@ pub fn App(comptime Msg: type) type {
                 try std.fmt.allocPrint(tree.allocator(), "size: {d}x{d}", .{ self.size.width, self.size.height }),
                 .{ .tone = .muted },
             );
+            const host_focus = try tree.textStyled(
+                if (self.terminal_focused) "tty: focused" else "tty: blurred",
+                .{ .tone = if (self.terminal_focused) .success else .warning },
+            );
             const status_rule = try tree.rule(10, .{ .tone = .muted });
             const status = try tree.box(
-                try tree.row(&.{ spinner, status_label, status_rule, focus_label, size }, .{ .gap = 2 }),
+                try tree.row(&.{ spinner, status_label, status_rule, focus_label, size, host_focus }, .{ .gap = 2 }),
                 .{
                     .title = "Runtime",
                     .padding = ui.Insets.symmetric(0, 1),
@@ -268,7 +307,7 @@ pub fn App(comptime Msg: type) type {
 
             const controls = try tree.box(
                 try tree.textStyled(
-                    "page-up/page-down switch panels, tab/shift+tab move between form fields, arrows move in lists, q quits",
+                    "page-up/page-down switch panels, paste goes into focused inputs, mouse wheel scrolls the list, q quits",
                     .{ .tone = .muted },
                 ),
                 .{
@@ -428,4 +467,53 @@ test "showcase routes outer focus into the draft form" {
 
     try std.testing.expectEqualStrings("demo", program.model.draft.valueById("name").?);
     try std.testing.expectEqualStrings("cmd", program.model.draft.valueById("command").?);
+}
+
+test "showcase accepts paste and focus events" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try program.send(.{ .paste = "input" });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expectEqualStrings("input", program.model.filter.value());
+
+    try program.send(.focus_lost);
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(!program.model.terminal_focused);
+
+    try program.send(.{ .key = .page_down });
+    try program.send(.{ .key = .page_down });
+    try program.send(.{ .paste = "zig-app" });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expectEqualStrings("zig-app", program.model.draft.valueById("name").?);
+
+    try program.send(.focus_gained);
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.terminal_focused);
+}
+
+test "showcase list reacts to mouse wheel when focused" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try program.send(.{ .key = .page_down });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.focus.isFocused(zone_list));
+
+    try program.send(.{ .mouse = .{
+        .x = 0,
+        .y = 0,
+        .button = .wheel_down,
+        .action = .scroll,
+    } });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expectEqual(@as(usize, 1), program.model.list.selected);
 }

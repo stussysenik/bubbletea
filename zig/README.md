@@ -20,9 +20,9 @@ What is here:
 - A headless runtime in [`src/headless.zig`](./src/headless.zig)
 - A shared focus utility in [`src/focus.zig`](./src/focus.zig)
 - A composable cross-host view tree in [`src/ui.zig`](./src/ui.zig)
-- A stateful terminal input decoder in [`src/input.zig`](./src/input.zig)
+- A stateful terminal input decoder in [`src/input.zig`](./src/input.zig) that handles keys, paste, focus, and SGR mouse events
 - Raw terminal setup and size polling in [`src/terminal.zig`](./src/terminal.zig)
-- A line-diff ANSI renderer in [`src/renderer.zig`](./src/renderer.zig)
+- A line-diff ANSI renderer in [`src/renderer.zig`](./src/renderer.zig) that also enables terminal protocols such as bracketed paste and focus reporting
 - Reusable components in [`src/components`](./src/components), including text input, table, and form primitives
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
@@ -46,7 +46,7 @@ The Zig rewrite starts from different assumptions:
 The current prototype already avoids some obvious overhead, but these are the best next steps:
 
 1. Replace line diffing with a cell buffer so cursor movement and short edits become cheaper than whole-line clears.
-2. Parse terminal input as a stream state machine so UTF-8, mouse, bracketed paste, and Kitty keyboard enhancements can stay allocation-free.
+2. Keep extending the stream decoder so Kitty keyboard enhancements, clipboard hooks, and richer mouse routing stay centralized and allocation-light.
 3. Move timers and I/O to platform event sources (`kqueue`, `epoll`, `io_uring` later) instead of poll-plus-scan.
 4. Add a rope or segmented buffer for large views so composing components does not always flatten into one contiguous string.
 5. Expand the current view tree into a richer layout/style system so the same model tree can target terminal, web, or WASM renderers cleanly.

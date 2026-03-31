@@ -10,9 +10,16 @@ pub const terminal = @import("terminal.zig");
 pub const HeadlessProgram = @import("headless.zig").HeadlessProgram;
 /// Stateful terminal decoder that can drain multiple keys from one read.
 pub const InputDecoder = input.Decoder;
+/// Higher-level terminal event emitted by the decoder.
+pub const InputEvent = input.Event;
 /// Shared focus helper for components and applications.
 pub const FocusRing = focus.FocusRing;
 pub const Key = tea.Key;
+pub const MouseAction = tea.MouseAction;
+pub const MouseButton = tea.MouseButton;
+pub const MouseModifiers = tea.MouseModifiers;
+pub const MouseEvent = tea.MouseEvent;
+pub const MouseMode = tea.MouseMode;
 pub const Size = tea.Size;
 pub const Renderer = tea.Renderer;
 pub const Terminal = tea.Terminal;

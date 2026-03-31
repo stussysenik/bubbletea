@@ -6,12 +6,24 @@ const terminal_mod = @import("terminal.zig");
 
 /// Input key type re-exported from the decoder layer.
 pub const Key = input.Key;
+/// Higher-level decoded terminal event.
+pub const InputEvent = input.Event;
+/// Normalized mouse action metadata.
+pub const MouseAction = input.MouseAction;
+/// Normalized mouse button metadata.
+pub const MouseButton = input.MouseButton;
+/// Modifier flags attached to mouse events.
+pub const MouseModifiers = input.MouseModifiers;
+/// Pointer event as reported by the terminal host.
+pub const MouseEvent = input.MouseEvent;
 /// Terminal viewport size.
 pub const Size = terminal_mod.Size;
 /// Terminal renderer implementation.
 pub const Renderer = renderer_mod.Renderer;
 /// Terminal host abstraction.
 pub const Terminal = terminal_mod.Terminal;
+/// Terminal mouse tracking mode.
+pub const MouseMode = renderer_mod.MouseMode;
 
 /// Timer identity passed back to models when delayed commands fire.
 pub const TimerMsg = struct {
@@ -24,6 +36,10 @@ pub fn Message(comptime UserMsg: type) type {
         none,
         quit,
         key: Key,
+        paste: []const u8,
+        focus_gained,
+        focus_lost,
+        mouse: MouseEvent,
         resize: Size,
         timer: TimerMsg,
         user: UserMsg,
@@ -167,6 +183,9 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             alt_screen: bool = true,
             use_raw_mode: bool = true,
             poll_interval_ms: i32 = 16,
+            bracketed_paste: bool = true,
+            focus_reporting: bool = true,
+            mouse_mode: MouseMode = .none,
         };
 
         /// Creates a terminal program around the provided model instance.
@@ -180,6 +199,9 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                     .alt_screen = options.alt_screen,
                     .hide_cursor = true,
                     .ansi_enabled = terminal.stdout.isTty(),
+                    .bracketed_paste = options.bracketed_paste,
+                    .focus_reporting = options.focus_reporting,
+                    .mouse_mode = options.mouse_mode,
                 }),
                 .input_decoder = input.Decoder.init(allocator),
                 .options = options,
@@ -266,9 +288,9 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             }
 
             // Decoder state is drained before more syscalls so one read can
-            // yield multiple logical key events.
-            if (self.input_decoder.next()) |key| {
-                return .{ .key = key };
+            // yield multiple logical input events.
+            if (self.input_decoder.nextEvent()) |event| {
+                return self.messageFromInputEvent(event);
             }
 
             const now = nowNs();
@@ -282,8 +304,8 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                 const read_len = try self.terminal.readInput(&buffer);
                 if (read_len > 0) {
                     try self.input_decoder.feed(buffer[0..read_len]);
-                    if (self.input_decoder.next()) |key| {
-                        return .{ .key = key };
+                    if (self.input_decoder.nextEvent()) |event| {
+                        return self.messageFromInputEvent(event);
                     }
                 }
             }
@@ -300,8 +322,8 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
 
             // If polling timed out with a partial escape sequence buffered,
             // treat it as a standalone key rather than waiting forever.
-            if (self.input_decoder.flush()) |key| {
-                return .{ .key = key };
+            if (self.input_decoder.flushEvent()) |event| {
+                return self.messageFromInputEvent(event);
             }
 
             return null;
@@ -318,6 +340,18 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                     .msg = tick.message,
                 }),
             }
+        }
+
+        /// Converts a normalized decoder event into the runtime message union.
+        fn messageFromInputEvent(self: *Self, event: input.Event) Msg {
+            _ = self;
+            return switch (event) {
+                .key => |key| .{ .key = key },
+                .paste => |text| .{ .paste = text },
+                .focus_gained => .focus_gained,
+                .focus_lost => .focus_lost,
+                .mouse => |mouse| .{ .mouse = mouse },
+            };
         }
 
         /// Removes the earliest scheduled message whose deadline has passed.

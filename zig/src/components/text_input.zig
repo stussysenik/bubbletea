@@ -60,6 +60,37 @@ pub fn TextInput(comptime capacity: usize) type {
             self.cursor = text.len;
         }
 
+        /// Inserts an entire UTF-8 slice at the current cursor location.
+        pub fn insertText(self: *Self, text: []const u8) bool {
+            if (text.len == 0) return false;
+            if (self.len + text.len > capacity) return false;
+
+            // Validation happens before mutation so paste-style inserts stay
+            // all-or-nothing.
+            var index: usize = 0;
+            while (index < text.len) {
+                const sequence_len = std.unicode.utf8ByteSequenceLength(text[index]) catch return false;
+                if (index + sequence_len > text.len) return false;
+                _ = std.unicode.utf8Decode(text[index .. index + sequence_len]) catch return false;
+                index += sequence_len;
+            }
+
+            std.mem.copyBackwards(
+                u8,
+                self.buffer[self.cursor + text.len .. self.len + text.len],
+                self.buffer[self.cursor..self.len],
+            );
+            std.mem.copyForwards(
+                u8,
+                self.buffer[self.cursor .. self.cursor + text.len],
+                text,
+            );
+
+            self.len += text.len;
+            self.cursor += text.len;
+            return true;
+        }
+
         /// Applies editing and cursor-motion keys.
         pub fn update(self: *Self, key: tea.Key) bool {
             return switch (key) {
@@ -280,4 +311,14 @@ test "text input compose shows prompt cursor and placeholder" {
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "query> ") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "|") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "type here") != null);
+}
+
+test "text input can paste a utf8 slice" {
+    var input = TextInput(32).init(.{
+        .prompt = "draft> ",
+    });
+
+    try std.testing.expect(input.insertText("zig "));
+    try std.testing.expect(input.insertText("téa"));
+    try std.testing.expectEqualStrings("zig téa", input.value());
 }
