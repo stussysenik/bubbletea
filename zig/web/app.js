@@ -13,6 +13,13 @@ const SPECIAL_KEYS = Object.freeze({
   ShiftTab: 1010,
 });
 
+const REGION_CODES = Object.freeze({
+  filter: 1,
+  list: 2,
+  menu: 3,
+  form: 4,
+});
+
 const POINTER_BUTTONS = Object.freeze({
   0: 1,
   1: 2,
@@ -222,6 +229,7 @@ function sendPasteText(text) {
 
 function handleMouseDown(event) {
   focusTerminal();
+  focusRegionFromEvent(event);
   event.preventDefault();
   dispatchMouse(event, POINTER_ACTIONS.press);
 }
@@ -241,6 +249,7 @@ function handleMouseMove(event) {
 function handleWheel(event) {
   if (!state.exports) return;
   event.preventDefault();
+  focusRegionFromEvent(event);
 
   const button =
     Math.abs(event.deltaX) > Math.abs(event.deltaY)
@@ -473,6 +482,11 @@ function buildBoxNode(node, metrics) {
   element.className = `ui-node ui-box tone-${node.tone} border-${node.border}`;
   applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
 
+  if (node.region) {
+    element.dataset.region = node.region;
+    element.classList.add("ui-region");
+  }
+
   if (node.title) {
     const title = document.createElement("div");
     title.className = `ui-box__title tone-${node.tone}`;
@@ -514,6 +528,29 @@ function buildUnknownNode(node) {
   element.className = "ui-node ui-text tone-warning";
   element.textContent = `unknown node: ${node.kind}`;
   return element;
+}
+
+function focusRegionFromEvent(event) {
+  if (!state.exports) return;
+
+  const regionName = regionNameFromEvent(event);
+  if (!regionName) return;
+
+  const regionCode = REGION_CODES[regionName];
+  if (!regionCode) return;
+
+  sendRuntime(() => state.exports.bt_focus_region(regionCode), `region ${regionName}`);
+}
+
+function regionNameFromEvent(event) {
+  const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
+  for (const element of elementsAtPoint) {
+    const regionHost = element.closest?.("[data-region]");
+    if (regionHost?.dataset.region) {
+      return regionHost.dataset.region;
+    }
+  }
+  return null;
 }
 
 function applyNodeLayout(element, layout, metrics, options = {}) {

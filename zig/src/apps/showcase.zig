@@ -48,6 +48,15 @@ const zone_list: usize = 1;
 const zone_menu: usize = 2;
 const zone_form: usize = 3;
 
+/// Browser-visible focus regions used by the static web host for click-based
+/// hit testing.
+pub const BrowserRegion = enum(u8) {
+    filter = 1,
+    list = 2,
+    menu = 3,
+    form = 4,
+};
+
 const scaffold_items = [_]ScaffoldMenu.Item{
     .{ .label = "Terminal Tool", .detail = "single-binary CLI scaffold with native widgets", .tone = .accent },
     .{ .label = "Shared CLI + WASM", .detail = "one model reused across terminal and browser hosts", .tone = .warning },
@@ -260,6 +269,7 @@ pub fn App(comptime Msg: type) type {
                 try self.filter.compose(tree),
                 .{
                     .title = if (self.focus.isFocused(zone_filter)) "Filter (focused)" else "Filter",
+                    .region = filterRegionName(),
                     .padding = ui.Insets.symmetric(0, 1),
                     .tone = if (self.focus.isFocused(zone_filter)) .accent else .muted,
                 },
@@ -269,6 +279,7 @@ pub fn App(comptime Msg: type) type {
                 try self.list.compose(tree),
                 .{
                     .title = if (self.focus.isFocused(zone_list)) "Visible Areas (focused)" else "Visible Areas",
+                    .region = listRegionName(),
                     .padding = ui.Insets.symmetric(0, 1),
                     .tone = if (self.focus.isFocused(zone_list)) .success else .accent,
                 },
@@ -278,6 +289,7 @@ pub fn App(comptime Msg: type) type {
                 try self.scaffold_menu.compose(tree),
                 .{
                     .title = if (self.focus.isFocused(zone_menu)) "Scaffold Presets (focused)" else "Scaffold Presets",
+                    .region = menuRegionName(),
                     .padding = ui.Insets.symmetric(0, 1),
                     .tone = if (self.focus.isFocused(zone_menu)) .warning else .muted,
                 },
@@ -302,6 +314,7 @@ pub fn App(comptime Msg: type) type {
                 try self.draft.compose(tree),
                 .{
                     .title = if (self.focus.isFocused(zone_form)) "Draft App (focused)" else "Draft App",
+                    .region = formRegionName(),
                     .padding = ui.Insets.symmetric(0, 1),
                     .tone = if (self.focus.isFocused(zone_form)) .warning else .muted,
                 },
@@ -404,7 +417,42 @@ pub fn App(comptime Msg: type) type {
             self.draft.field(1).setValue(selectedPresetCommand(self.scaffold_menu.selected)) catch unreachable;
             self.draft.field(2).setValue(selectedPresetTarget(self.scaffold_menu.selected)) catch unreachable;
         }
+
+        /// Lets browser hosts jump focus directly to a known interactive
+        /// region instead of replaying key navigation.
+        pub fn focusBrowserRegion(self: *Self, region: BrowserRegion) bool {
+            const zone = switch (region) {
+                .filter => zone_filter,
+                .list => zone_list,
+                .menu => zone_menu,
+                .form => zone_form,
+            };
+
+            const changed = self.focus.focus(zone);
+            if (changed) self.syncFocus();
+            return changed;
+        }
     };
+}
+
+// Stable browser-facing region label for the filter panel.
+fn filterRegionName() []const u8 {
+    return @tagName(BrowserRegion.filter);
+}
+
+// Stable browser-facing region label for the list panel.
+fn listRegionName() []const u8 {
+    return @tagName(BrowserRegion.list);
+}
+
+// Stable browser-facing region label for the menu panel.
+fn menuRegionName() []const u8 {
+    return @tagName(BrowserRegion.menu);
+}
+
+// Stable browser-facing region label for the form panel.
+fn formRegionName() []const u8 {
+    return @tagName(BrowserRegion.form);
 }
 
 // Counts finished rows to drive the progress bar.
@@ -617,6 +665,23 @@ test "showcase list reacts to mouse wheel when focused" {
     } });
     try std.testing.expect(!(try program.drain()));
     try std.testing.expectEqual(@as(usize, 1), program.model.list.selected);
+}
+
+test "showcase can focus browser regions directly" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.focusBrowserRegion(.menu));
+    try std.testing.expect(program.model.focus.isFocused(zone_menu));
+    try std.testing.expect(program.model.scaffold_menu.active);
+
+    try std.testing.expect(program.model.focusBrowserRegion(.form));
+    try std.testing.expect(program.model.focus.isFocused(zone_form));
+    try std.testing.expect(program.model.draft.active);
 }
 
 test "showcase menu applies scaffold presets" {

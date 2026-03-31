@@ -106,6 +106,15 @@ pub export fn bt_set_focus(focused: bool) bool {
     return refreshRenderBuffer();
 }
 
+/// Focuses one known showcase region directly from the browser host.
+pub export fn bt_focus_region(region_code: u8) bool {
+    const region = decodeRegion(region_code) orelse return false;
+    const p = getProgram() orelse return false;
+
+    _ = p.model.focusBrowserRegion(region);
+    return refreshBuffers();
+}
+
 /// Sends one normalized mouse event from the browser host.
 ///
 /// `button_code` maps to:
@@ -141,7 +150,7 @@ pub export fn bt_send_mouse(button_code: u8, action_code: u8, x: u16, y: u16, mo
 pub export fn bt_tick(delta_ms: u32) bool {
     const p = getProgram() orelse return false;
     _ = p.advanceBy(@as(u64, delta_ms) * std.time.ns_per_ms) catch return false;
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Returns the start pointer for the current frame buffer.
@@ -202,6 +211,12 @@ fn refreshTreeBuffer() bool {
     return true;
 }
 
+// Refreshes both flat text and structured tree buffers after direct model
+// mutations initiated by browser-only helpers.
+fn refreshBuffers() bool {
+    return refreshRenderBuffer() and refreshTreeBuffer();
+}
+
 // Normalizes browser-side numeric key codes into runtime keys.
 fn decodeKey(code: u32) tea.Key {
     return switch (code) {
@@ -251,6 +266,17 @@ fn decodeMouseAction(code: u8) ?tea.MouseAction {
         3 => .drag,
         4 => .move,
         5 => .scroll,
+        else => null,
+    };
+}
+
+// Maps browser-facing showcase region ids back to known app panels.
+fn decodeRegion(code: u8) ?showcase.BrowserRegion {
+    return switch (code) {
+        @intFromEnum(showcase.BrowserRegion.filter) => .filter,
+        @intFromEnum(showcase.BrowserRegion.list) => .list,
+        @intFromEnum(showcase.BrowserRegion.menu) => .menu,
+        @intFromEnum(showcase.BrowserRegion.form) => .form,
         else => null,
     };
 }

@@ -73,6 +73,7 @@ pub const StackOptions = struct {
 /// Styling and layout options for boxed nodes.
 pub const BoxOptions = struct {
     title: ?[]const u8 = null,
+    region: ?[]const u8 = null,
     padding: Insets = .{},
     border: Border = .single,
     alignment: Align = .left,
@@ -110,6 +111,7 @@ const StackNode = struct {
 const BoxNode = struct {
     child: NodeId,
     title: ?[]const u8,
+    region: ?[]const u8,
     padding: Insets,
     border: Border,
     alignment: Align,
@@ -236,6 +238,7 @@ pub const Tree = struct {
             .box = .{
                 .child = child,
                 .title = options.title,
+                .region = options.region,
                 .padding = options.padding,
                 .border = options.border,
                 .alignment = options.alignment,
@@ -422,6 +425,12 @@ fn writeNodeJsonAt(tree: *const Tree, writer: anytype, node_id: NodeId, origin: 
             try writer.writeAll("{\"kind\":\"box\",\"title\":");
             if (box_node.title) |title| {
                 try writeJsonString(writer, title);
+            } else {
+                try writer.writeAll("null");
+            }
+            try writer.writeAll(",\"region\":");
+            if (box_node.region) |region| {
+                try writeJsonString(writer, region);
             } else {
                 try writer.writeAll("null");
             }
@@ -1098,16 +1107,25 @@ test "tree writes structured json snapshots" {
 
     const left = try tree.textStyled("ab", .{ .tone = .accent });
     const right = try tree.text("cd");
-    const row = try tree.row(&.{ left, right }, .{ .gap = 3 });
+    const row = try tree.box(
+        try tree.row(&.{ left, right }, .{ .gap = 3 }),
+        .{
+            .title = "Row",
+            .region = "list",
+            .padding = Insets.symmetric(0, 1),
+        },
+    );
 
     var buffer: std.ArrayList(u8) = .empty;
     defer buffer.deinit(std.testing.allocator);
 
     try tree.writeJson(buffer.writer(std.testing.allocator), row);
 
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"box\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"region\":\"list\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"row\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":0,\"y\":0,\"width\":7,\"height\":1}") != null);
-    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":5,\"y\":0,\"width\":2,\"height\":1}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":0,\"y\":0,\"width\":11,\"height\":3}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":7,\"y\":1,\"width\":2,\"height\":1}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"tone\":\"accent\"") != null);
 }
 

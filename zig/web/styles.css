@@ -245,6 +245,15 @@ body {
   overflow: hidden;
 }
 
+.ui-region {
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.ui-region:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .ui-box.border-none {
   border: 0;
   background: transparent;
