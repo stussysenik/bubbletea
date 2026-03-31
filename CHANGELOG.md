@@ -1,3 +1,10 @@
+# [0.2.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.1.0...zig-v0.2.0) (2026-03-31)
+
+
+### Features
+
+* **zig:** add form and focus primitives ([8612654](https://github.com/stussysenik/bubbletea/commit/8612654f8e2c1c9886a6b54ceb9b428e3cc091a1))
+
 # [0.1.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.0.0...zig-v0.1.0) (2026-03-31)
 
 
