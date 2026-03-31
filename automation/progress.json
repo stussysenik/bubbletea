@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input plus editable, tabular, and form-driven UI primitives on top of a shared composable tree.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a static browser host that drives the same runtime through WASM.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -21,6 +21,7 @@
         "zig/ui",
         "zig/components",
         "zig/wasm",
+        "zig/web",
         "zig/automation",
         "docs"
       ]
@@ -69,8 +70,8 @@
     },
     {
       "name": "Browser renderer",
-      "status": "planned",
-      "details": "The core is WASM-ready, but a DOM/SVG/Canvas renderer has not been built yet."
+      "status": "in_progress",
+      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, and renders the current text frame; a real DOM/SVG/Canvas renderer is still ahead."
     }
   ],
   "layers": [
@@ -128,12 +129,14 @@
     },
     {
       "name": "WASM and Browser Host",
-      "status": "planned",
+      "status": "in_progress",
       "paths": [
-        "zig/src/wasm_showcase.zig"
+        "zig/src/wasm_showcase.zig",
+        "zig/build.zig",
+        "zig/web"
       ],
-      "shipped": "The core can already compile to WASM and drive a headless text renderer from browser-controlled resize, key, paste, focus, mouse, and timer calls.",
-      "next": "Build a DOM/SVG/Canvas host that consumes the same model tree and gradually replaces text-only rendering on the web side."
+      "shipped": "The core now compiles to WASM, boots through a static browser shell, and accepts browser-driven resize, key, paste, focus, mouse, and timer calls while rendering the shared text frame on the web side.",
+      "next": "Replace the text-only browser shell with a DOM/SVG/Canvas renderer that consumes the same model tree instead of just the flattened frame."
     },
     {
       "name": "Release and Repo Automation",
@@ -162,8 +165,16 @@
       "purpose": "Verify the freestanding WASM module is emitted successfully."
     },
     {
+      "command": "cd zig && zig build web",
+      "purpose": "Verify the browser host assets and colocated WASM bundle are emitted together."
+    },
+    {
       "command": "cd zig && printf 'q' | zig build run | sed -n '1,12p'",
       "purpose": "Smoke-test the CLI host in non-interactive mode."
+    },
+    {
+      "command": "npm run web:check",
+      "purpose": "Parse-check the static browser bridge before serving it."
     },
     {
       "command": "npm run docs:check",
@@ -174,7 +185,7 @@
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
     "Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
-    "Add a browser host that renders the same view tree from WASM-backed state.",
+    "Replace the text-only browser shell with a DOM/SVG/Canvas renderer that consumes the shared view tree from WASM-backed state.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]
 }

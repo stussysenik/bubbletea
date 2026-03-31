@@ -1,0 +1,243 @@
+:root {
+  --page-bg: #f4f1e8;
+  --page-ink: #17212b;
+  --panel-bg: rgba(250, 248, 243, 0.78);
+  --panel-border: rgba(23, 33, 43, 0.14);
+  --terminal-bg: #13202b;
+  --terminal-ink: #eff3f6;
+  --terminal-border: rgba(17, 32, 43, 0.35);
+  --accent: #b5672a;
+  --accent-soft: rgba(181, 103, 42, 0.14);
+  --muted: #59636f;
+  --shadow: 0 20px 50px rgba(23, 33, 43, 0.14);
+  --mono-font: "SF Mono", "IBM Plex Mono", "JetBrains Mono", "Menlo", monospace;
+  --ui-font: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--page-ink);
+  background:
+    radial-gradient(circle at top left, rgba(181, 103, 42, 0.2), transparent 28rem),
+    radial-gradient(circle at bottom right, rgba(19, 32, 43, 0.14), transparent 22rem),
+    linear-gradient(180deg, #f9f5ec 0%, var(--page-bg) 100%);
+  font-family: var(--ui-font);
+}
+
+/* The page shell keeps the browser host feeling intentional instead of like a
+   bare WASM test harness. */
+.page-shell {
+  width: min(1200px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.hero {
+  padding: 1rem 0 1.75rem;
+}
+
+.eyebrow,
+.panel-kicker {
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.hero h1,
+.panel-header h2 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.hero h1 {
+  font-size: clamp(2.4rem, 5vw, 4.8rem);
+  line-height: 0.96;
+  max-width: 11ch;
+}
+
+.lede {
+  max-width: 48rem;
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid rgba(23, 33, 43, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 8px 20px rgba(23, 33, 43, 0.06);
+  font-family: var(--mono-font);
+  font-size: 0.84rem;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 0.9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.panel {
+  border: 1px solid var(--panel-border);
+  border-radius: 1.5rem;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+  padding: 1.2rem 1.2rem 0;
+}
+
+.panel-action {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.7rem 0.95rem;
+  color: var(--terminal-bg);
+  background: var(--accent-soft);
+  font-family: var(--mono-font);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.panel-action:hover,
+.panel-action:focus-visible {
+  background: rgba(181, 103, 42, 0.22);
+  transform: translateY(-1px);
+}
+
+/* The shell is focusable so browser key events can be routed through the same
+   runtime API that the terminal host uses. */
+.terminal-shell {
+  position: relative;
+  min-height: 34rem;
+  margin: 1rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid var(--terminal-border);
+  border-radius: 1.15rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 3rem),
+    var(--terminal-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  outline: none;
+}
+
+.terminal-shell:focus-visible {
+  box-shadow:
+    0 0 0 3px rgba(181, 103, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.terminal-output,
+.cell-measure {
+  margin: 0;
+  white-space: pre;
+  color: var(--terminal-ink);
+  font: 0.95rem/1.35 var(--mono-font);
+}
+
+.terminal-output {
+  min-height: 100%;
+}
+
+.cell-measure {
+  position: absolute;
+  inset: auto auto 0 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.notes-panel {
+  padding-bottom: 1.15rem;
+}
+
+.notes-list,
+.shortcut-list {
+  margin: 1rem 1.35rem 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.shortcuts {
+  margin-top: 1.4rem;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.9rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid rgba(23, 33, 43, 0.15);
+  border-bottom-width: 2px;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--page-ink);
+  font-family: var(--mono-font);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@media (max-width: 960px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h1 {
+    max-width: none;
+  }
+
+  .terminal-shell {
+    min-height: 28rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    width: min(100vw, calc(100vw - 1rem));
+    padding-top: 1.2rem;
+  }
+
+  .panel-header {
+    flex-direction: column;
+  }
+
+  .terminal-shell {
+    margin: 0.8rem;
+    padding: 0.85rem;
+    min-height: 24rem;
+  }
+
+  .terminal-output,
+  .cell-measure {
+    font-size: 0.8rem;
+  }
+}

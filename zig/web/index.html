@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bubble Tea Zig Browser Host</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero">
+        <p class="eyebrow">bubbletea-zig</p>
+        <h1>Browser host for the Zig rewrite</h1>
+        <p class="lede">
+          The same headless runtime now boots inside a static web shell and
+          consumes keyboard, paste, focus, mouse, resize, and timer events
+          through the exported WASM bridge.
+        </p>
+        <div class="status-row" aria-label="Runtime status">
+          <span class="status-pill" id="status-runtime">loading runtime</span>
+          <span class="status-pill" id="status-size">-- cols x -- rows</span>
+          <span class="status-pill" id="status-focus">blurred</span>
+          <span class="status-pill" id="status-frame">0 bytes</span>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <article class="panel terminal-panel">
+          <header class="panel-header">
+            <div>
+              <p class="panel-kicker">Showcase Surface</p>
+              <h2>WASM-backed terminal view</h2>
+            </div>
+            <button class="panel-action" id="focus-terminal" type="button">
+              Focus terminal
+            </button>
+          </header>
+
+          <div
+            class="terminal-shell"
+            id="terminal-shell"
+            tabindex="0"
+            role="application"
+            aria-label="Bubble Tea Zig showcase terminal"
+          >
+            <pre class="terminal-output" id="terminal-output"></pre>
+            <pre class="cell-measure" id="cell-measure" aria-hidden="true">MMMMMMMMMM
+MMMMMMMMMM</pre>
+          </div>
+        </article>
+
+        <aside class="panel notes-panel">
+          <header class="panel-header">
+            <div>
+              <p class="panel-kicker">Bridge Notes</p>
+              <h2>What this host exercises</h2>
+            </div>
+          </header>
+
+          <ul class="notes-list">
+            <li>Normalized browser keys map onto the Zig runtime key enum.</li>
+            <li>Paste uses the shared UTF-8 scratch buffer before dispatch.</li>
+            <li>Mouse coordinates are projected into terminal cells.</li>
+            <li>Resize derives columns and rows from measured mono cell size.</li>
+            <li>Frame updates stay text-first until the real web renderer lands.</li>
+          </ul>
+
+          <div class="shortcuts">
+            <p class="panel-kicker">Useful Inputs</p>
+            <ul class="shortcut-list">
+              <li><kbd>Tab</kbd> switch focus zones</li>
+              <li><kbd>Enter</kbd> apply scaffold presets</li>
+              <li><kbd>/</kbd> focus the filter field</li>
+              <li><kbd>Wheel</kbd> scroll focused lists and menus</li>
+              <li><kbd>Cmd/Ctrl+V</kbd> paste into the active text input</li>
+            </ul>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

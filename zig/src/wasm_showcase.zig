@@ -23,10 +23,19 @@ var input_buffer: [input_capacity]u8 = [_]u8{0} ** input_capacity;
 
 /// Initializes the headless showcase and produces the first frame.
 pub export fn bt_init() bool {
-    if (program != null) return refreshRenderBuffer();
+    const first_init = program == null;
+    const p = ensureProgram() orelse return false;
 
-    program = Program.init(allocator, .{});
-    _ = bt_resize(80, 24);
+    if (first_init) {
+        p.send(.{
+            .resize = .{
+                .width = 80,
+                .height = 24,
+            },
+        }) catch return false;
+        _ = p.drain() catch return false;
+    }
+
     return refreshRenderBuffer();
 }
 
@@ -144,18 +153,17 @@ pub export fn bt_render_len() usize {
 
 // Lazily boots the headless runtime on first use.
 fn getProgram() ?*Program {
+    return ensureProgram();
+}
+
+// Creates and boots the runtime exactly once, even when the browser host
+// calls into exports in different orders.
+fn ensureProgram() ?*Program {
     if (program == null) {
         program = Program.init(allocator, .{});
-        const p = &program.?;
-        p.boot() catch return null;
-        p.send(.{
-            .resize = .{
-                .width = 80,
-                .height = 24,
-            },
-        }) catch return null;
-        _ = p.drain() catch return null;
     }
+    const p = &program.?;
+    p.boot() catch return null;
     return &program.?;
 }
 
@@ -172,10 +180,17 @@ fn refreshRenderBuffer() bool {
 fn decodeKey(code: u32) tea.Key {
     return switch (code) {
         3 => .ctrl_c,
+        26 => .ctrl_z,
         1001 => .up,
         1002 => .down,
         1003 => .left,
         1004 => .right,
+        1005 => .home,
+        1006 => .end,
+        1007 => .delete,
+        1008 => .page_up,
+        1009 => .page_down,
+        1010 => .shift_tab,
         9 => .tab,
         13 => .enter,
         27 => .escape,

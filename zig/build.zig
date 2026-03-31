@@ -1,7 +1,8 @@
 const std = @import("std");
 
 /// Wires the reusable library module, the native showcase binary, the
-/// freestanding WASM showcase, and the standard test/run steps.
+/// freestanding WASM showcase, the browser host assets, and the standard
+/// test/run steps.
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -59,6 +60,24 @@ pub fn build(b: *std.Build) void {
     const install_wasm = b.addInstallArtifact(wasm, .{});
     const wasm_step = b.step("wasm", "Build the WASM showcase module");
     wasm_step.dependOn(&install_wasm.step);
+
+    // The web step installs both the browser shell and a colocated WASM
+    // module so the host can be served as static files without extra
+    // post-processing.
+    const install_web_assets = b.addInstallDirectory(.{
+        .source_dir = b.path("web"),
+        .install_dir = .prefix,
+        .install_subdir = "web/showcase",
+    });
+    const install_web_wasm = b.addInstallArtifact(wasm, .{
+        .dest_dir = .{
+            .override = .{ .custom = "web/showcase" },
+        },
+        .dest_sub_path = "bubbletea-zig-showcase.wasm",
+    });
+    const web_step = b.step("web", "Build the browser showcase host");
+    web_step.dependOn(&install_web_assets.step);
+    web_step.dependOn(&install_web_wasm.step);
 
     // Module tests cover the runtime, rendering, and component layers.
     const mod_tests = b.addTest(.{

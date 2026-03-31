@@ -12,6 +12,8 @@ This directory contains a Zig-first Bubble Tea rewrite prototype instead of a li
 - [Layer Roadmap](#layer-roadmap)
 - [Run](#run)
 - [Build WASM](#build-wasm)
+- [Build Web Host](#build-web-host)
+- [Serve Web Host](#serve-web-host)
 - [Test](#test)
 <!-- toc:end -->
 
@@ -28,6 +30,7 @@ What is here:
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
 - A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with resize, key, paste, focus, mouse, tick, and render entrypoints
+- A static browser host in [`web`](./web) that drives the WASM build through a thin JavaScript bridge and CSS shell
 
 ## Why this shape
 
@@ -59,6 +62,7 @@ If the goal is a serious product and not just a terminal port:
 - Use Zig for the terminal runtime and shared state/update/layout core.
 - Use Elixir outside that core for supervision, clustering, presence, queues, and failure isolation.
 - Use TypeScript and CSS only for a browser renderer or admin shell, not for terminal styling.
+- For the current host, plain JavaScript is enough; add TypeScript once the browser adapter grows past a small static bridge and needs stronger editor feedback.
 - Use WASM only if you want to reuse the Zig core in the browser; otherwise a native TS renderer is simpler.
 - Use Lua only if you need end-user scripting, plugin sandboxes, or live automation hooks. Do not put Lua in the core runtime path by default.
 - For vector graphics in the browser, use SVG for structured UI and Canvas/WebGL/WebGPU when animation throughput matters.
@@ -96,6 +100,28 @@ zig build run
 cd zig
 zig build wasm
 ```
+
+## Build Web Host
+
+```sh
+cd zig
+zig build web
+```
+
+The static host lands in `zig/zig-out/web/showcase` with:
+
+- `index.html`
+- `styles.css`
+- `app.js`
+- `bubbletea-zig-showcase.wasm`
+
+## Serve Web Host
+
+```sh
+python3 -m http.server --directory zig/zig-out/web/showcase 4173
+```
+
+Then open `http://127.0.0.1:4173`.
 
 ## Test
 
