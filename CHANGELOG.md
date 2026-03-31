@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.2.0...zig-v0.3.0) (2026-03-31)
+
+
+### Features
+
+* **zig:** add protocol-aware terminal input ([6dd1d1e](https://github.com/stussysenik/bubbletea/commit/6dd1d1e8188934c49acf8432d75e937f0e3cd97c))
+
 # [0.2.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.1.0...zig-v0.2.0) (2026-03-31)
 
 
