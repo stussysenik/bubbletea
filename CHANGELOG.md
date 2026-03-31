@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.10.0...zig-v0.11.0) (2026-03-31)
+
+
+### Features
+
+* **zig/ui:** add semantic cursors and shared cell widths ([e8b33b7](https://github.com/stussysenik/bubbletea/commit/e8b33b78954e03dfed1ad922ffe0ad8b4940fdac))
+
 # [0.10.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.9.0...zig-v0.10.0) (2026-03-31)
 
 
