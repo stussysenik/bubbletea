@@ -6,7 +6,6 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 <!-- toc:start -->
 - [Release Line](#release-line)
 - [Layer Map](#layer-map)
-- [Recent Zig Commits](#recent-zig-commits)
 - [Commit Scopes](#commit-scopes)
 - [Immediate Order](#immediate-order)
 <!-- toc:end -->
@@ -14,9 +13,9 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 ## Release Line
 
 - Latest Zig Tag: `zig-v0.3.0`
-- Latest Zig Commit: `6dd1d1e` feat(zig): add protocol-aware terminal input
 - Tag Format: `zig-v${version}`
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
+- Live Status: Run `npm run release:status` for the current head commit and recent Zig-native commit subjects.
 
 ## Layer Map
 
@@ -29,12 +28,6 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 | Components and App Kit | In Progress | zig/src/components<br>zig/src/focus.zig<br>zig/src/apps/showcase.zig | The rewrite has a native component surface for badges, spinners, lists, progress bars, text inputs, tables, forms, and shared focus handling. | Add inspectors, validation, menus, richer tables, and layout-aware interaction primitives that feel like a real framework instead of a demo set. |
 | WASM and Browser Host | Planned | zig/src/wasm_showcase.zig | The core can already compile to WASM and drive a headless text renderer from browser-controlled resize, key, and timer calls. | Build a DOM/SVG/Canvas host that consumes the same model tree and gradually replaces text-only rendering on the web side. |
 | Release and Repo Automation | In Progress | scripts/update-docs.mjs<br>release.config.cjs<br>package.json<br>.github/workflows/semantic-release.yml | Semantic-release already owns zig-v* tagging, changelog updates, and docs-sync on main. | Keep layer status, latest release line, and recent Zig-native commit intent visible so every gradual push has an obvious place in the roadmap. |
-
-## Recent Zig Commits
-
-- `6dd1d1e` feat(zig): add protocol-aware terminal input
-- `8612654` feat(zig): add form and focus primitives
-- `94b22f0` feat(zig): add headless runtime and release automation
 
 ## Commit Scopes
 

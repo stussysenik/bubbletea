@@ -18,7 +18,6 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md)
 - Release Strategy: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
 - Latest Zig Tag: `zig-v0.3.0`
-- Latest Zig Commit: `6dd1d1e` feat(zig): add protocol-aware terminal input
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 
 ## Status Board

@@ -88,7 +88,6 @@ ${project.summary}
 - Docs: [README](${project.docs.readme}), [zig/README](${project.docs.zig_readme}), [PROGRESS](${project.docs.progress}), [LAYERS](${project.docs.layers})
 - Release Strategy: ${project.release.strategy}
 - Latest Zig Tag: \`${git.latestTag}\`
-- Latest Zig Commit: \`${git.latestZigCommit.hash}\` ${git.latestZigCommit.subject}
 - Commit Style: ${project.release.commit_style}
 
 ## Status Board
@@ -118,12 +117,6 @@ function renderLayers(data, git) {
     ),
   ].join("\n");
 
-  const recentCommits = git.recentZigCommits.length
-    ? git.recentZigCommits
-        .map((commit) => `- \`${commit.hash}\` ${commit.subject}`)
-        .join("\n")
-    : "- No Zig-native conventional commits found yet.";
-
   const scopes = project.release.scopes.map((scope) => `- \`${scope}\``).join("\n");
   const nextList = next.map((item) => `- ${item}`).join("\n");
 
@@ -138,17 +131,13 @@ Generated from \`automation/progress.json\` and local git state on ${generatedAt
 ## Release Line
 
 - Latest Zig Tag: \`${git.latestTag}\`
-- Latest Zig Commit: \`${git.latestZigCommit.hash}\` ${git.latestZigCommit.subject}
 - Tag Format: \`${project.release.tag_format}\`
 - Commit Style: ${project.release.commit_style}
+- Live Status: Run \`npm run release:status\` for the current head commit and recent Zig-native commit subjects.
 
 ## Layer Map
 
 ${layerBoard}
-
-## Recent Zig Commits
-
-${recentCommits}
 
 ## Commit Scopes
 
@@ -289,28 +278,9 @@ function collectGitMeta(cwd) {
   const latestTag =
     git(cwd, ["tag", "--list", "zig-v*", "--sort=-version:refname"]).split(/\r?\n/).filter(Boolean)[0] ??
     "unreleased";
-  const recentZigCommits = git(cwd, [
-    "log",
-    "--max-count=5",
-    "--pretty=format:%h%x09%s",
-    "--perl-regexp",
-    "--grep=^(feat|fix|refactor|docs|chore)\\(zig(?:/[^)]*)?\\):",
-  ])
-    .split(/\r?\n/)
-    .filter(Boolean)
-    .map((line) => {
-      const [hash, subject] = line.split("\t");
-      return { hash, subject };
-    });
-  const latestZigCommit = recentZigCommits[0] ?? {
-    hash: "unknown",
-    subject: "No Zig-native conventional commit found",
-  };
 
   return {
     latestTag,
-    latestZigCommit,
-    recentZigCommits,
   };
 }
 
