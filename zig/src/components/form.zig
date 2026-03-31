@@ -26,6 +26,8 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             placeholder: []const u8 = "",
             prompt: []const u8 = "",
             tone: ui.Tone = .accent,
+            required: bool = false,
+            min_len: usize = 0,
         };
 
         /// Shared presentation options for the form container.
@@ -109,6 +111,47 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             return self.inputs[index].insertText(text);
         }
 
+        /// Returns true when every field satisfies its declarative rules.
+        pub fn isValid(self: *const Self) bool {
+            return self.firstInvalidIndex() == null;
+        }
+
+        /// Counts how many fields currently fail validation.
+        pub fn invalidCount(self: *const Self) usize {
+            var count: usize = 0;
+            inline for (0..field_count) |index| {
+                if (self.validationMessage(index) != null) count += 1;
+            }
+            return count;
+        }
+
+        /// Returns the first invalid field index when validation fails.
+        pub fn firstInvalidIndex(self: *const Self) ?usize {
+            inline for (0..field_count) |index| {
+                if (self.validationMessage(index) != null) return index;
+            }
+            return null;
+        }
+
+        /// Focuses the first invalid field to help callers guide correction.
+        pub fn focusFirstInvalid(self: *Self) bool {
+            const index = self.firstInvalidIndex() orelse return false;
+            return self.setFocusedIndex(index);
+        }
+
+        /// Returns the validation message for one field when it is invalid.
+        pub fn validationMessage(self: *const Self, index: usize) ?[]const u8 {
+            const spec = self.specs[index];
+            const field_value = self.inputs[index].value();
+            if (spec.required and field_value.len == 0) {
+                return "required";
+            }
+            if (spec.min_len > 0 and field_value.len < spec.min_len) {
+                return "too short";
+            }
+            return null;
+        }
+
         /// Plain text fallback for headless or minimal hosts.
         pub fn view(self: *const Self, writer: anytype) !void {
             if (field_count == 0) {
@@ -120,6 +163,9 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
                 const marker = if (self.active and self.focus.isFocused(index)) ">" else " ";
                 try std.fmt.format(writer, "{s} {s}: ", .{ marker, spec.label });
                 try self.inputs[index].view(writer);
+                if (self.validationMessage(index)) |message| {
+                    try std.fmt.format(writer, " [{s}]", .{message});
+                }
                 try writer.writeByte('\n');
             }
         }
@@ -139,12 +185,14 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             }
 
             const extra: usize = if (self.help != null) 1 else 0;
-            const nodes = try tree.allocNodeIds(field_count + extra);
+            const summary_extra: usize = if (self.invalidCount() != 0) 1 else 0;
+            const nodes = try tree.allocNodeIds(field_count + extra + summary_extra);
             var count: usize = 0;
 
             inline for (0..field_count) |index| {
                 const spec = self.specs[index];
                 const focused = self.active and self.focus.isFocused(index);
+                const validation = self.validationMessage(index);
 
                 const id_badge = try tree.textStyled(spec.id, .{ .tone = .muted });
                 const field_box = try tree.box(
@@ -152,16 +200,35 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
                     .{
                         .title = spec.label,
                         .padding = ui.Insets.symmetric(0, 1),
-                        .tone = if (focused) spec.tone else .muted,
+                        .tone = if (validation != null) .warning else if (focused) spec.tone else .muted,
                     },
                 );
 
-                nodes[count] = try tree.column(&.{ id_badge, field_box }, .{ .gap = 0 });
+                if (validation) |message| {
+                    nodes[count] = try tree.column(
+                        &.{
+                            id_badge,
+                            field_box,
+                            try tree.textStyled(message, .{ .tone = .warning }),
+                        },
+                        .{ .gap = 0 },
+                    );
+                } else {
+                    nodes[count] = try tree.column(&.{ id_badge, field_box }, .{ .gap = 0 });
+                }
                 count += 1;
             }
 
             if (self.help) |help| {
                 nodes[count] = try tree.textStyled(help, .{ .tone = .muted });
+                count += 1;
+            }
+
+            if (self.invalidCount() != 0) {
+                nodes[count] = try tree.textStyled(
+                    try std.fmt.allocPrint(tree.allocator(), "{d} field(s) need attention", .{self.invalidCount()}),
+                    .{ .tone = .warning },
+                );
                 count += 1;
             }
 
@@ -236,4 +303,23 @@ test "form pastes into the focused field" {
     try std.testing.expect(form.update(.tab));
     try std.testing.expect(form.paste("build run"));
     try std.testing.expectEqualStrings("build run", form.valueById("cmd").?);
+}
+
+test "form validation tracks missing and short fields" {
+    const DemoForm = Form(2, 32);
+    var form = DemoForm.init(.{
+        .{ .id = "name", .label = "Name", .required = true },
+        .{ .id = "cmd", .label = "Command", .min_len = 3 },
+    }, .{});
+
+    try std.testing.expect(!form.isValid());
+    try std.testing.expectEqual(@as(usize, 2), form.invalidCount());
+    try std.testing.expectEqualStrings("required", form.validationMessage(0).?);
+    try std.testing.expectEqualStrings("too short", form.validationMessage(1).?);
+
+    try std.testing.expect(form.paste("zig"));
+    try std.testing.expect(form.update(.tab));
+    try std.testing.expect(form.paste("run"));
+    try std.testing.expect(form.isValid());
+    try std.testing.expectEqual(@as(usize, 0), form.invalidCount());
 }

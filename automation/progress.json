@@ -45,7 +45,7 @@
     {
       "name": "Reusable components",
       "status": "done",
-      "details": "Spinner, list, badge, inspector, progress bar, text input, table, and form components now live in zig/src/components."
+      "details": "Spinner, list, badge, inspector, menu, progress bar, text input, table, and form components now live in zig/src/components."
     },
     {
       "name": "Terminal styling",
@@ -65,7 +65,7 @@
     {
       "name": "Higher-level app kit",
       "status": "in_progress",
-      "details": "Text input, table, form, inspector, shared focus primitives, paste insertion, and list wheel navigation landed; richer validation and interaction primitives are the next framework layer."
+      "details": "Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, and wheel navigation landed; richer command routing and interaction primitives are the next framework layer."
     },
     {
       "name": "Browser renderer",
@@ -123,8 +123,8 @@
         "zig/src/focus.zig",
         "zig/src/apps/showcase.zig"
       ],
-      "shipped": "The rewrite has a native component surface for badges, inspectors, spinners, lists, progress bars, text inputs, tables, forms, and shared focus handling.",
-      "next": "Add validation, menus, richer tables, and layout-aware interaction primitives that feel like a real framework instead of a demo set."
+      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, and shared focus handling.",
+      "next": "Add richer tables, command routing, and layout-aware interaction primitives that feel like a real framework instead of a demo set."
     },
     {
       "name": "WASM and Browser Host",
@@ -173,7 +173,7 @@
   "next": [
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
     "Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.",
-    "Add first-class framework components for validation, menus, and richer layout/styling primitives on top of the new form/focus layer.",
+    "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
     "Add a browser host that renders the same view tree from WASM-backed state.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]

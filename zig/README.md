@@ -24,7 +24,7 @@ What is here:
 - A stateful terminal input decoder in [`src/input.zig`](./src/input.zig) that handles keys, paste, focus, and SGR mouse events
 - Raw terminal setup and size polling in [`src/terminal.zig`](./src/terminal.zig)
 - A line-diff ANSI renderer in [`src/renderer.zig`](./src/renderer.zig) that also enables terminal protocols such as bracketed paste and focus reporting
-- Reusable components in [`src/components`](./src/components), including inspector, text input, table, and form primitives
+- Reusable components in [`src/components`](./src/components), including inspector, menu, text input, table, and form primitives
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
 - A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with resize, key, paste, focus, mouse, tick, and render entrypoints

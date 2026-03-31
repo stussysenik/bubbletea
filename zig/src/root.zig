@@ -35,6 +35,7 @@ pub const Program = tea.Program;
 pub const components = struct {
     pub const Badge = @import("components/badge.zig").Badge;
     pub const Inspector = @import("components/inspector.zig").Inspector;
+    pub const Menu = @import("components/menu.zig").Menu;
     pub const Spinner = @import("components/spinner.zig").Spinner;
     pub const List = @import("components/list.zig").List;
     pub const ProgressBar = @import("components/progress.zig").ProgressBar;
@@ -56,6 +57,7 @@ test {
     _ = @import("headless.zig");
     _ = @import("components/badge.zig");
     _ = @import("components/inspector.zig");
+    _ = @import("components/menu.zig");
     _ = @import("components/spinner.zig");
     _ = @import("components/list.zig");
     _ = @import("components/progress.zig");
