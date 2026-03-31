@@ -135,6 +135,27 @@ const Node = union(enum) {
     rule: RuleNode,
 };
 
+// Measured size in terminal cell units. Browser hosts can translate the same
+// values into pixels after measuring one monospace cell locally.
+const LayoutSize = struct {
+    width: usize,
+    height: usize,
+};
+
+// Top-left origin for one node in the composed grid.
+const LayoutOrigin = struct {
+    x: usize = 0,
+    y: usize = 0,
+};
+
+// Full frame data attached to every serialized node.
+const LayoutFrame = struct {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+};
+
 /// Arena-backed scene graph used to compose one frame at a time.
 pub const Tree = struct {
     arena_state: std.heap.ArenaAllocator,
@@ -331,8 +352,16 @@ pub fn renderModelJson(
         defer frame_buffer.deinit(allocator);
 
         try model.view(frame_buffer.writer(allocator));
+        const size = measureTextContent(frame_buffer.items);
         try writer.writeAll("{\"kind\":\"text\",\"content\":");
         try writeJsonString(writer, frame_buffer.items);
+        try writer.writeAll(",\"layout\":");
+        try writeLayoutJson(writer, .{
+            .x = 0,
+            .y = 0,
+            .width = size.width,
+            .height = size.height,
+        });
         try writer.writeAll(",\"tone\":\"normal\",\"alignment\":\"left\"}");
         return;
     }
@@ -344,10 +373,20 @@ pub fn renderModelJson(
 // object. This keeps the browser bridge thin while still reusing the real Zig
 // composition tree.
 fn writeNodeJson(tree: *const Tree, writer: anytype, node_id: NodeId) !void {
+    try writeNodeJsonAt(tree, writer, node_id, .{});
+}
+
+// Walks the scene graph in layout order so every serialized node carries its
+// measured bounds inside the root grid.
+fn writeNodeJsonAt(tree: *const Tree, writer: anytype, node_id: NodeId, origin: LayoutOrigin) !void {
+    const size = measureNode(tree, node_id);
+
     switch (tree.nodes.items[node_id]) {
         .text => |text_node| {
             try writer.writeAll("{\"kind\":\"text\",\"content\":");
             try writeJsonString(writer, text_node.content);
+            try writer.writeAll(",\"layout\":");
+            try writeLayoutJson(writer, makeFrame(origin, size));
             try writer.writeAll(",\"tone\":");
             try writeJsonEnumTag(writer, text_node.tone);
             try writer.writeAll(",\"alignment\":");
@@ -357,25 +396,37 @@ fn writeNodeJson(tree: *const Tree, writer: anytype, node_id: NodeId) !void {
         .stack => |stack_node| {
             try writer.writeAll("{\"kind\":");
             try writeJsonString(writer, if (stack_node.axis == .horizontal) "row" else "column");
+            try writer.writeAll(",\"layout\":");
+            try writeLayoutJson(writer, makeFrame(origin, size));
             try writer.writeAll(",\"gap\":");
             try writeJsonNumber(writer, stack_node.gap);
             try writer.writeAll(",\"children\":[");
 
             const children = tree.childrenFor(stack_node.children);
+            var child_origin = origin;
             for (children, 0..) |child_id, index| {
                 if (index > 0) try writer.writeByte(',');
-                try writeNodeJson(tree, writer, child_id);
+                try writeNodeJsonAt(tree, writer, child_id, child_origin);
+
+                const child_size = measureNode(tree, child_id);
+                switch (stack_node.axis) {
+                    .horizontal => child_origin.x += child_size.width + stack_node.gap,
+                    .vertical => child_origin.y += child_size.height + stack_node.gap,
+                }
             }
 
             try writer.writeAll("]}");
         },
         .box => |box_node| {
+            const child_size = measureNode(tree, box_node.child);
             try writer.writeAll("{\"kind\":\"box\",\"title\":");
             if (box_node.title) |title| {
                 try writeJsonString(writer, title);
             } else {
                 try writer.writeAll("null");
             }
+            try writer.writeAll(",\"layout\":");
+            try writeLayoutJson(writer, makeFrame(origin, size));
             try writer.writeAll(",\"tone\":");
             try writeJsonEnumTag(writer, box_node.tone);
             try writer.writeAll(",\"alignment\":");
@@ -385,11 +436,13 @@ fn writeNodeJson(tree: *const Tree, writer: anytype, node_id: NodeId) !void {
             try writer.writeAll(",\"padding\":");
             try writeInsetsJson(writer, box_node.padding);
             try writer.writeAll(",\"child\":");
-            try writeNodeJson(tree, writer, box_node.child);
+            try writeNodeJsonAt(tree, writer, box_node.child, boxChildOrigin(origin, box_node, child_size));
             try writer.writeByte('}');
         },
         .spacer => |spacer_node| {
-            try writer.writeAll("{\"kind\":\"spacer\",\"width\":");
+            try writer.writeAll("{\"kind\":\"spacer\",\"layout\":");
+            try writeLayoutJson(writer, makeFrame(origin, size));
+            try writer.writeAll(",\"width\":");
             try writeJsonNumber(writer, spacer_node.width);
             try writer.writeAll(",\"height\":");
             try writeJsonNumber(writer, spacer_node.height);
@@ -399,7 +452,9 @@ fn writeNodeJson(tree: *const Tree, writer: anytype, node_id: NodeId) !void {
             var glyph_buffer: [4]u8 = undefined;
             const glyph_len = std.unicode.utf8Encode(rule_node.glyph, &glyph_buffer) catch unreachable;
 
-            try writer.writeAll("{\"kind\":\"rule\",\"width\":");
+            try writer.writeAll("{\"kind\":\"rule\",\"layout\":");
+            try writeLayoutJson(writer, makeFrame(origin, size));
+            try writer.writeAll(",\"width\":");
             try writeJsonNumber(writer, rule_node.width);
             try writer.writeAll(",\"glyph\":");
             try writeJsonString(writer, glyph_buffer[0..glyph_len]);
@@ -448,6 +503,19 @@ fn writeJsonNumber(writer: anytype, value: usize) !void {
     try std.fmt.format(writer, "{d}", .{value});
 }
 
+// Serializes one measured node frame.
+fn writeLayoutJson(writer: anytype, frame: LayoutFrame) !void {
+    try writer.writeAll("{\"x\":");
+    try writeJsonNumber(writer, frame.x);
+    try writer.writeAll(",\"y\":");
+    try writeJsonNumber(writer, frame.y);
+    try writer.writeAll(",\"width\":");
+    try writeJsonNumber(writer, frame.width);
+    try writer.writeAll(",\"height\":");
+    try writeJsonNumber(writer, frame.height);
+    try writer.writeByte('}');
+}
+
 // Serializes box padding explicitly so browser hosts can keep spacing intent.
 fn writeInsetsJson(writer: anytype, insets: Insets) !void {
     try writer.writeAll("{\"top\":");
@@ -459,6 +527,150 @@ fn writeInsetsJson(writer: anytype, insets: Insets) !void {
     try writer.writeAll(",\"left\":");
     try writeJsonNumber(writer, insets.left);
     try writer.writeByte('}');
+}
+
+// Packs an origin and measured size into one serializable frame.
+fn makeFrame(origin: LayoutOrigin, size: LayoutSize) LayoutFrame {
+    return .{
+        .x = origin.x,
+        .y = origin.y,
+        .width = size.width,
+        .height = size.height,
+    };
+}
+
+// Measures one node without allocating render buffers so non-terminal hosts can
+// reason about the same layout as the text renderer.
+fn measureNode(tree: *const Tree, node_id: NodeId) LayoutSize {
+    return switch (tree.nodes.items[node_id]) {
+        .text => |text_node| measureTextContent(text_node.content),
+        .stack => |stack_node| measureStack(tree, stack_node),
+        .box => |box_node| measureBox(box_node, measureNode(tree, box_node.child)),
+        .spacer => |spacer_node| .{
+            .width = spacer_node.width,
+            .height = spacerHeight(spacer_node),
+        },
+        .rule => |rule_node| .{
+            .width = ruleWidth(rule_node),
+            .height = 1,
+        },
+    };
+}
+
+// Text nodes expand to the widest rendered line and keep at least one row.
+fn measureTextContent(text: []const u8) LayoutSize {
+    var width: usize = 0;
+    var height: usize = 0;
+    var lines = std.mem.splitScalar(u8, text, '\n');
+
+    while (lines.next()) |part| {
+        height += 1;
+        width = @max(width, displayWidth(part));
+    }
+
+    if (height == 0) height = 1;
+    return .{ .width = width, .height = height };
+}
+
+// Stacks resolve to the same rectangular size used by the line renderer.
+fn measureStack(tree: *const Tree, stack_node: StackNode) LayoutSize {
+    const children = tree.childrenFor(stack_node.children);
+    if (children.len == 0) {
+        return .{ .width = 0, .height = 1 };
+    }
+
+    return switch (stack_node.axis) {
+        .vertical => blk: {
+            var width: usize = 0;
+            var height: usize = 0;
+
+            for (children, 0..) |child_id, index| {
+                const child = measureNode(tree, child_id);
+                width = @max(width, child.width);
+                height += child.height;
+                if (index + 1 < children.len) {
+                    height += stack_node.gap;
+                }
+            }
+
+            break :blk .{ .width = width, .height = height };
+        },
+        .horizontal => blk: {
+            var width: usize = 0;
+            var height: usize = 0;
+
+            for (children, 0..) |child_id, index| {
+                const child = measureNode(tree, child_id);
+                width += child.width;
+                if (index + 1 < children.len) {
+                    width += stack_node.gap;
+                }
+                height = @max(height, child.height);
+            }
+
+            break :blk .{ .width = width, .height = height };
+        },
+    };
+}
+
+// Box size is derived from child size, padding, optional title span, and
+// border cells so renderer and browser host share the same contract.
+fn measureBox(box_node: BoxNode, child: LayoutSize) LayoutSize {
+    const body_width = measureBoxBodyWidth(box_node, child.width);
+    const border_cells = borderInset(box_node.border) * 2;
+    return .{
+        .width = body_width + border_cells,
+        .height = child.height + box_node.padding.top + box_node.padding.bottom + border_cells,
+    };
+}
+
+// The title is embedded into the top border, so it can widen the whole box.
+fn measureBoxBodyWidth(box_node: BoxNode, child_width: usize) usize {
+    const title_width = if (box_node.title) |title| displayWidth(title) + 2 else 0;
+    const padded_child_width = child_width + box_node.padding.left + box_node.padding.right;
+    return @max(padded_child_width, title_width);
+}
+
+// Box children are placed inside the border and padding, with the same
+// alignment math used by the text renderer.
+fn boxChildOrigin(origin: LayoutOrigin, box_node: BoxNode, child: LayoutSize) LayoutOrigin {
+    const body_width = measureBoxBodyWidth(box_node, child.width);
+    const inner_width = body_width - box_node.padding.left - box_node.padding.right;
+    const left_offset = alignedOffset(box_node.alignment, inner_width, child.width);
+    const inset = borderInset(box_node.border);
+
+    return .{
+        .x = origin.x + inset + box_node.padding.left + left_offset,
+        .y = origin.y + inset + box_node.padding.top,
+    };
+}
+
+// Horizontal alignment offset shared by box layout and line rendering.
+fn alignedOffset(alignment: Align, width: usize, child_width: usize) usize {
+    const remaining = width - child_width;
+    return switch (alignment) {
+        .left => 0,
+        .center => remaining / 2,
+        .right => remaining,
+    };
+}
+
+// Border thickness expressed in terminal cells.
+fn borderInset(border: Border) usize {
+    return switch (border) {
+        .none => 0,
+        .single => 1,
+    };
+}
+
+// Spacers keep at least one row so they remain visible to hosts.
+fn spacerHeight(spacer_node: SpacerNode) usize {
+    return if (spacer_node.height == 0) 1 else spacer_node.height;
+}
+
+// Rules keep at least one column, matching the renderer.
+fn ruleWidth(rule_node: RuleNode) usize {
+    return if (rule_node.width == 0) 1 else rule_node.width;
 }
 
 // One rendered line plus its cached display width.
@@ -604,7 +816,7 @@ fn renderSpacer(allocator: std.mem.Allocator, spacer_node: SpacerNode) std.mem.A
     var block = Block.init(allocator);
     block.width = spacer_node.width;
 
-    const height = if (spacer_node.height == 0) 1 else spacer_node.height;
+    const height = spacerHeight(spacer_node);
     for (0..height) |_| {
         try block.appendBlankLine(spacer_node.width);
     }
@@ -615,7 +827,7 @@ fn renderSpacer(allocator: std.mem.Allocator, spacer_node: SpacerNode) std.mem.A
 // Rules repeat one glyph across a single line.
 fn renderRule(allocator: std.mem.Allocator, rule_node: RuleNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     var block = Block.init(allocator);
-    const width = if (rule_node.width == 0) 1 else rule_node.width;
+    const width = ruleWidth(rule_node);
     var line = Line{};
 
     if (rule_node.glyph <= 0x7F) {
@@ -722,14 +934,13 @@ fn renderBox(tree: *Tree, box_node: BoxNode, ctx: RenderContext) std.mem.Allocat
     defer child_block.deinit();
 
     const title_width = if (box_node.title) |title| displayWidth(title) + 2 else 0;
-    const padded_child_width = child_block.width + box_node.padding.left + box_node.padding.right;
-    const body_width = @max(padded_child_width, title_width);
+    const body_width = measureBoxBodyWidth(box_node, child_block.width);
 
     var block = Block.init(allocator);
-    block.width = switch (box_node.border) {
-        .none => body_width,
-        .single => body_width + 2,
-    };
+    block.width = measureBox(box_node, .{
+        .width = child_block.width,
+        .height = child_block.height(),
+    }).width;
 
     if (box_node.border == .single) {
         var top = Line{};
@@ -816,12 +1027,8 @@ fn appendAlignedLine(
     }
 
     const line = child_line.?;
+    const left_padding = alignedOffset(alignment, width, line.width);
     const remaining = width - line.width;
-    const left_padding = switch (alignment) {
-        .left => 0,
-        .center => remaining / 2,
-        .right => remaining,
-    };
     const right_padding = remaining - left_padding;
 
     try target.appendRepeat(allocator, ' ', left_padding);
@@ -889,23 +1096,18 @@ test "tree writes structured json snapshots" {
     var tree = Tree.init(std.testing.allocator);
     defer tree.deinit();
 
-    const title = try tree.textStyled("Framework", .{ .tone = .accent });
-    const status = try tree.text("Headless first");
-    const row = try tree.row(&.{ title, status }, .{ .gap = 2 });
-    const panel = try tree.box(row, .{
-        .title = "Demo",
-        .padding = Insets.symmetric(0, 1),
-        .tone = .accent,
-    });
+    const left = try tree.textStyled("ab", .{ .tone = .accent });
+    const right = try tree.text("cd");
+    const row = try tree.row(&.{ left, right }, .{ .gap = 3 });
 
     var buffer: std.ArrayList(u8) = .empty;
     defer buffer.deinit(std.testing.allocator);
 
-    try tree.writeJson(buffer.writer(std.testing.allocator), panel);
+    try tree.writeJson(buffer.writer(std.testing.allocator), row);
 
-    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"box\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"row\"") != null);
-    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"title\":\"Demo\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":0,\"y\":0,\"width\":7,\"height\":1}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":5,\"y\":0,\"width\":2,\"height\":1}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"tone\":\"accent\"") != null);
 }
 
@@ -923,5 +1125,6 @@ test "renderModelJson falls back to plain text view models" {
     try renderModelJson(Model, std.testing.allocator, &model, buffer.writer(std.testing.allocator));
 
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"text\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":0,\"y\":0,\"width\":14,\"height\":1}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "plain fallback") != null);
 }

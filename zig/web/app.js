@@ -418,49 +418,60 @@ function clampCell(value, max) {
 // The DOM host deliberately mirrors the semantic Zig node types instead of
 // trying to parse the flattened text frame back into panels.
 function renderTree(snapshot) {
-  elements.tree.replaceChildren(buildTreeNode(snapshot));
+  const metrics = measureCell();
+  elements.tree.replaceChildren(buildTreeNode(snapshot, metrics));
 }
 
-function buildTreeNode(node) {
+function buildTreeNode(node, metrics) {
   switch (node.kind) {
     case "text":
-      return buildTextNode(node);
+      return buildTextNode(node, metrics);
     case "row":
     case "column":
-      return buildStackNode(node);
+      return buildStackNode(node, metrics);
     case "box":
-      return buildBoxNode(node);
+      return buildBoxNode(node, metrics);
     case "spacer":
-      return buildSpacerNode(node);
+      return buildSpacerNode(node, metrics);
     case "rule":
-      return buildRuleNode(node);
+      return buildRuleNode(node, metrics);
     default:
       return buildUnknownNode(node);
   }
 }
 
-function buildTextNode(node) {
+function buildTextNode(node, metrics) {
   const element = document.createElement("div");
   element.className = `ui-node ui-text tone-${node.tone} align-${node.alignment}`;
   element.textContent = node.content;
+  applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
   return element;
 }
 
-function buildStackNode(node) {
+function buildStackNode(node, metrics) {
   const element = document.createElement("div");
   element.className = `ui-node ui-${node.kind}`;
-  element.style.setProperty("--stack-gap", `${Math.max(0.45, node.gap * 0.4)}rem`);
+  applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
+
+  if (node.kind === "row") {
+    element.style.columnGap = cellsToPixels(node.gap, metrics);
+    element.style.rowGap = "0px";
+  } else {
+    element.style.rowGap = linesToPixels(node.gap, metrics);
+    element.style.columnGap = "0px";
+  }
 
   for (const child of node.children) {
-    element.append(buildTreeNode(child));
+    element.append(buildTreeNode(child, metrics));
   }
 
   return element;
 }
 
-function buildBoxNode(node) {
+function buildBoxNode(node, metrics) {
   const element = document.createElement("section");
   element.className = `ui-node ui-box tone-${node.tone} border-${node.border}`;
+  applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
 
   if (node.title) {
     const title = document.createElement("div");
@@ -471,23 +482,29 @@ function buildBoxNode(node) {
 
   const body = document.createElement("div");
   body.className = `ui-box__body align-${node.alignment}`;
-  body.style.padding = formatPadding(node.padding);
-  body.append(buildTreeNode(node.child));
+  body.style.padding = formatPadding(node.padding, metrics);
+  body.style.minWidth = cellsToPixels(innerWidth(node), metrics);
+  body.style.minHeight = linesToPixels(innerHeight(node), metrics);
+  body.style.alignItems = alignToItems(node.alignment);
+  body.append(buildTreeNode(node.child, metrics));
   element.append(body);
   return element;
 }
 
-function buildSpacerNode(node) {
+function buildSpacerNode(node, metrics) {
   const element = document.createElement("div");
   element.className = "ui-node ui-spacer";
-  element.style.width = `${Math.max(0, node.width)}ch`;
-  element.style.height = `${Math.max(1, node.height || 1) * 1.35}em`;
+  applyNodeLayout(element, node.layout, metrics, {
+    exactWidth: true,
+    exactHeight: true,
+  });
   return element;
 }
 
-function buildRuleNode(node) {
+function buildRuleNode(node, metrics) {
   const element = document.createElement("div");
   element.className = `ui-node ui-rule tone-${node.tone}`;
+  applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
   element.textContent = node.glyph.repeat(Math.max(1, node.width));
   return element;
 }
@@ -499,10 +516,57 @@ function buildUnknownNode(node) {
   return element;
 }
 
-function formatPadding(padding) {
-  const top = `${padding.top * 0.45}rem`;
-  const right = `${Math.max(0.75, padding.right)}ch`;
-  const bottom = `${padding.bottom * 0.45}rem`;
-  const left = `${Math.max(0.75, padding.left)}ch`;
+function applyNodeLayout(element, layout, metrics, options = {}) {
+  if (!layout) return;
+
+  element.dataset.gridX = String(layout.x);
+  element.dataset.gridY = String(layout.y);
+  element.dataset.gridWidth = String(layout.width);
+  element.dataset.gridHeight = String(layout.height);
+  element.style.minWidth = cellsToPixels(layout.width, metrics);
+  element.style.minHeight = linesToPixels(layout.height, metrics);
+
+  if (options.exactWidth) {
+    element.style.width = cellsToPixels(layout.width, metrics);
+  }
+  if (options.exactHeight) {
+    element.style.height = linesToPixels(layout.height, metrics);
+  }
+}
+
+function cellsToPixels(value, metrics) {
+  return `${Math.max(0, value) * metrics.cellWidth}px`;
+}
+
+function linesToPixels(value, metrics) {
+  return `${Math.max(0, value) * metrics.cellHeight}px`;
+}
+
+function innerWidth(node) {
+  const border = node.border === "single" ? 2 : 0;
+  return Math.max(0, node.layout.width - border - node.padding.left - node.padding.right);
+}
+
+function innerHeight(node) {
+  const border = node.border === "single" ? 2 : 0;
+  return Math.max(0, node.layout.height - border - node.padding.top - node.padding.bottom);
+}
+
+function alignToItems(alignment) {
+  switch (alignment) {
+    case "center":
+      return "center";
+    case "right":
+      return "flex-end";
+    default:
+      return "flex-start";
+  }
+}
+
+function formatPadding(padding, metrics) {
+  const top = linesToPixels(padding.top, metrics);
+  const right = cellsToPixels(padding.right, metrics);
+  const bottom = linesToPixels(padding.bottom, metrics);
+  const left = cellsToPixels(padding.left, metrics);
   return `${top} ${right} ${bottom} ${left}`;
 }

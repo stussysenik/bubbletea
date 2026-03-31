@@ -30,7 +30,7 @@ What is here:
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
 - A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with resize, key, paste, focus, mouse, tick, and render entrypoints
-- A static browser host in [`web`](./web) that drives the WASM build through a thin JavaScript bridge, consumes structured UI snapshots, and keeps the raw text frame available for debugging
+- A static browser host in [`web`](./web) that drives the WASM build through a thin JavaScript bridge, consumes structured UI snapshots with measured layout bounds, and keeps the raw text frame available for debugging
 
 ## Why this shape
 

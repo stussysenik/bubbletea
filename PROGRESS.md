@@ -12,7 +12,7 @@ Generated from `automation/progress.json` on 2026-03-31.
 
 ## Overview
 
-A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots from the same WASM-backed runtime.
+A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds from the same WASM-backed runtime.
 
 - Status: `active`
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md)
@@ -32,7 +32,7 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 | WASM host exports | Done | A freestanding WASM module with init, resize, key, paste, focus, mouse, tick, and render exports exists in zig/src/wasm_showcase.zig. |
 | Advanced terminal input | In Progress | The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, bracketed paste, focus reporting, and SGR mouse; Kitty keyboard, clipboard, and layout-aware hit testing are still ahead. |
 | Higher-level app kit | In Progress | Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, and wheel navigation landed; richer command routing and interaction primitives are the next framework layer. |
-| Browser renderer | In Progress | A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots for DOM rendering, and keeps the raw text frame available for debugging; layout metadata and richer web rendering are still ahead. |
+| Browser renderer | In Progress | A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, and keeps the raw text frame available for debugging; hit testing and richer web rendering are still ahead. |
 
 ## Verification
 
@@ -49,5 +49,5 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 - Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.
 - Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.
 - Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.
-- Add layout metadata and hit testing so the browser host can stop approximating spacing from terminal-oriented tree nodes.
+- Add layout-aware hit testing so the browser host can target focused widgets from real Zig-provided node bounds.
 - Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes.

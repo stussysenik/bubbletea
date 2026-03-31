@@ -33,7 +33,7 @@ To get started, see the tutorial below, the [examples][examples], the
 
 <!-- zig-rewrite:start -->
 - Status: `active`
-- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots from the same WASM-backed runtime.
+- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds from the same WASM-backed runtime.
 - Progress Board: 6 done, 3 in progress, 0 planned
 - Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md)
 - Latest Zig Tag: `zig-v0.6.0`

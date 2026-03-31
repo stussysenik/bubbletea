@@ -209,18 +209,17 @@ body {
    tree while letting the host express them with real DOM layout primitives. */
 .ui-node {
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 .ui-row {
   display: flex;
-  gap: var(--stack-gap, 0.75rem);
   align-items: flex-start;
 }
 
 .ui-column {
   display: flex;
   flex-direction: column;
-  gap: var(--stack-gap, 0.75rem);
 }
 
 .ui-text {
@@ -262,6 +261,8 @@ body {
 
 .ui-box__body {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .tone-normal {
