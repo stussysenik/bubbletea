@@ -12,7 +12,7 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 
 ## Release Line
 
-- Latest Zig Tag: `zig-v0.5.0`
+- Latest Zig Tag: `zig-v0.6.0`
 - Tag Format: `zig-v${version}`
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 - Live Status: Run `npm run release:status` for the current head commit and recent Zig-native commit subjects.
@@ -26,7 +26,7 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 | View Tree and Layout | Done | zig/src/ui.zig | The shared scene graph can render rows, columns, boxes, spacers, rules, and semantic tones across terminal, headless, and future browser hosts. | Expose layout metadata and measurable boxes so hit testing, scrolling regions, and cross-host renderers can share the same tree. |
 | Renderer | In Progress | zig/src/renderer.zig<br>zig/src/ui.zig | ANSI rendering is incremental at the line level and now enables the terminal modes needed for richer input. | Replace line diffing with a cell buffer so short edits, cursor motion, and host-specific effects get cheaper and more precise. |
 | Components and App Kit | In Progress | zig/src/components<br>zig/src/focus.zig<br>zig/src/apps/showcase.zig | The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, and shared focus handling. | Add richer tables, command routing, and layout-aware interaction primitives that feel like a real framework instead of a demo set. |
-| WASM and Browser Host | In Progress | zig/src/wasm_showcase.zig<br>zig/build.zig<br>zig/web | The core now compiles to WASM, boots through a static browser shell, and accepts browser-driven resize, key, paste, focus, mouse, and timer calls while rendering the shared text frame on the web side. | Replace the text-only browser shell with a DOM/SVG/Canvas renderer that consumes the same model tree instead of just the flattened frame. |
+| WASM and Browser Host | In Progress | zig/src/wasm_showcase.zig<br>zig/src/ui.zig<br>zig/build.zig<br>zig/web | The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, and exposes structured UI snapshots so the web host can render DOM nodes from the same model tree while keeping the raw text frame for debugging. | Add layout metadata, hit testing, and richer DOM/SVG/Canvas rendering so the browser host stops approximating spacing from terminal-oriented values. |
 | Release and Repo Automation | In Progress | scripts/update-docs.mjs<br>release.config.cjs<br>package.json<br>.github/workflows/semantic-release.yml | Semantic-release already owns zig-v* tagging, changelog updates, and docs-sync on main. | Keep layer status, latest release line, and recent Zig-native commit intent visible so every gradual push has an obvious place in the roadmap. |
 
 ## Commit Scopes
@@ -47,5 +47,5 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 - Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.
 - Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.
 - Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.
-- Replace the text-only browser shell with a DOM/SVG/Canvas renderer that consumes the shared view tree from WASM-backed state.
+- Add layout metadata and hit testing so the browser host can stop approximating spacing from terminal-oriented tree nodes.
 - Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes.

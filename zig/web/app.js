@@ -36,6 +36,7 @@ const textEncoder = new TextEncoder();
 const state = {
   exports: null,
   lastFrame: "",
+  lastTreeJson: "",
   lastTimestamp: 0,
   lastCols: 0,
   lastRows: 0,
@@ -44,6 +45,7 @@ const state = {
 
 const elements = {
   shell: document.getElementById("terminal-shell"),
+  tree: document.getElementById("tree-output"),
   output: document.getElementById("terminal-output"),
   measure: document.getElementById("cell-measure"),
   runtime: document.getElementById("status-runtime"),
@@ -68,7 +70,7 @@ async function boot() {
 
   bindHostEvents();
   syncGeometry();
-  renderFrame();
+  renderOutputs();
   setRuntimeStatus("runtime ready");
   focusTerminal();
   requestAnimationFrame(frameLoop);
@@ -215,7 +217,7 @@ function sendPasteText(text) {
     remaining = remaining.slice(result.read);
   }
 
-  renderFrame();
+  renderOutputs();
 }
 
 function handleMouseDown(event) {
@@ -340,7 +342,7 @@ function frameLoop(timestamp) {
     const delta = state.lastTimestamp === 0 ? 16 : Math.max(0, Math.min(250, timestamp - state.lastTimestamp));
     state.lastTimestamp = timestamp;
     if (state.exports.bt_tick(Math.round(delta))) {
-      renderFrame();
+      renderOutputs();
     }
   }
 
@@ -352,21 +354,39 @@ function sendRuntime(call, label) {
     setRuntimeStatus(`runtime rejected ${label}`);
     return;
   }
-  renderFrame();
+  renderOutputs();
 }
 
-function renderFrame() {
+function renderOutputs() {
   const frame = readFrame();
-  if (frame === state.lastFrame) return;
+  if (frame !== state.lastFrame) {
+    state.lastFrame = frame;
+    elements.output.textContent = frame;
+    elements.frame.textContent = `${textEncoder.encode(frame).length} bytes`;
+  }
 
-  state.lastFrame = frame;
-  elements.output.textContent = frame;
-  elements.frame.textContent = `${textEncoder.encode(frame).length} bytes`;
+  const treeJson = readTreeJson();
+  if (treeJson === state.lastTreeJson) return;
+
+  state.lastTreeJson = treeJson;
+
+  try {
+    renderTree(JSON.parse(treeJson));
+  } catch (error) {
+    setRuntimeStatus(`tree parse failed: ${error.message}`);
+  }
 }
 
 function readFrame() {
   const ptr = state.exports.bt_render_ptr();
   const len = state.exports.bt_render_len();
+  const bytes = new Uint8Array(state.exports.memory.buffer, ptr, len);
+  return textDecoder.decode(bytes);
+}
+
+function readTreeJson() {
+  const ptr = state.exports.bt_tree_ptr();
+  const len = state.exports.bt_tree_len();
   const bytes = new Uint8Array(state.exports.memory.buffer, ptr, len);
   return textDecoder.decode(bytes);
 }
@@ -393,4 +413,96 @@ function shellMetrics() {
 
 function clampCell(value, max) {
   return Math.max(0, Math.min(Math.max(0, max - 1), value));
+}
+
+// The DOM host deliberately mirrors the semantic Zig node types instead of
+// trying to parse the flattened text frame back into panels.
+function renderTree(snapshot) {
+  elements.tree.replaceChildren(buildTreeNode(snapshot));
+}
+
+function buildTreeNode(node) {
+  switch (node.kind) {
+    case "text":
+      return buildTextNode(node);
+    case "row":
+    case "column":
+      return buildStackNode(node);
+    case "box":
+      return buildBoxNode(node);
+    case "spacer":
+      return buildSpacerNode(node);
+    case "rule":
+      return buildRuleNode(node);
+    default:
+      return buildUnknownNode(node);
+  }
+}
+
+function buildTextNode(node) {
+  const element = document.createElement("div");
+  element.className = `ui-node ui-text tone-${node.tone} align-${node.alignment}`;
+  element.textContent = node.content;
+  return element;
+}
+
+function buildStackNode(node) {
+  const element = document.createElement("div");
+  element.className = `ui-node ui-${node.kind}`;
+  element.style.setProperty("--stack-gap", `${Math.max(0.45, node.gap * 0.4)}rem`);
+
+  for (const child of node.children) {
+    element.append(buildTreeNode(child));
+  }
+
+  return element;
+}
+
+function buildBoxNode(node) {
+  const element = document.createElement("section");
+  element.className = `ui-node ui-box tone-${node.tone} border-${node.border}`;
+
+  if (node.title) {
+    const title = document.createElement("div");
+    title.className = `ui-box__title tone-${node.tone}`;
+    title.textContent = node.title;
+    element.append(title);
+  }
+
+  const body = document.createElement("div");
+  body.className = `ui-box__body align-${node.alignment}`;
+  body.style.padding = formatPadding(node.padding);
+  body.append(buildTreeNode(node.child));
+  element.append(body);
+  return element;
+}
+
+function buildSpacerNode(node) {
+  const element = document.createElement("div");
+  element.className = "ui-node ui-spacer";
+  element.style.width = `${Math.max(0, node.width)}ch`;
+  element.style.height = `${Math.max(1, node.height || 1) * 1.35}em`;
+  return element;
+}
+
+function buildRuleNode(node) {
+  const element = document.createElement("div");
+  element.className = `ui-node ui-rule tone-${node.tone}`;
+  element.textContent = node.glyph.repeat(Math.max(1, node.width));
+  return element;
+}
+
+function buildUnknownNode(node) {
+  const element = document.createElement("div");
+  element.className = "ui-node ui-text tone-warning";
+  element.textContent = `unknown node: ${node.kind}`;
+  return element;
+}
+
+function formatPadding(padding) {
+  const top = `${padding.top * 0.45}rem`;
+  const right = `${Math.max(0.75, padding.right)}ch`;
+  const bottom = `${padding.bottom * 0.45}rem`;
+  const left = `${Math.max(0.75, padding.left)}ch`;
+  return `${top} ${right} ${bottom} ${left}`;
 }

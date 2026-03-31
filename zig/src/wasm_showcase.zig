@@ -17,6 +17,9 @@ const input_capacity = 4096;
 // Global host state kept alive across JS calls.
 var program: ?Program = null;
 var render_buffer: std.ArrayList(u8) = .empty;
+// Structured UI snapshots let browser hosts render real DOM nodes from the
+// Zig view tree while the raw text frame stays available for debugging.
+var tree_buffer: std.ArrayList(u8) = .empty;
 // Browser hosts can copy UTF-8 text into this scratch space before calling
 // `bt_send_paste`.
 var input_buffer: [input_capacity]u8 = [_]u8{0} ** input_capacity;
@@ -47,6 +50,8 @@ pub export fn bt_deinit() void {
     }
     render_buffer.deinit(allocator);
     render_buffer = .empty;
+    tree_buffer.deinit(allocator);
+    tree_buffer = .empty;
 }
 
 /// Sends a resize message from the browser host.
@@ -151,6 +156,18 @@ pub export fn bt_render_len() usize {
     return render_buffer.items.len;
 }
 
+/// Returns the start pointer for the current structured UI snapshot.
+pub export fn bt_tree_ptr() [*]const u8 {
+    _ = refreshTreeBuffer();
+    return tree_buffer.items.ptr;
+}
+
+/// Returns the current structured UI snapshot length in bytes.
+pub export fn bt_tree_len() usize {
+    _ = refreshTreeBuffer();
+    return tree_buffer.items.len;
+}
+
 // Lazily boots the headless runtime on first use.
 fn getProgram() ?*Program {
     return ensureProgram();
@@ -173,6 +190,15 @@ fn refreshRenderBuffer() bool {
     render_buffer.clearRetainingCapacity();
     const writer = render_buffer.writer(allocator);
     p.render(writer) catch return false;
+    return true;
+}
+
+// Rebuilds the structured UI snapshot lazily for browser-side DOM renderers.
+fn refreshTreeBuffer() bool {
+    const p = getProgram() orelse return false;
+    tree_buffer.clearRetainingCapacity();
+    const writer = tree_buffer.writer(allocator);
+    tea.ui.renderModelJson(App, allocator, &p.model, writer) catch return false;
     return true;
 }
 

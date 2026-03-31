@@ -251,6 +251,12 @@ pub const Tree = struct {
         try block.writeTo(writer);
     }
 
+    /// Serializes one frame tree into a JSON structure suitable for browser
+    /// hosts that want to render real DOM nodes instead of flattened text.
+    pub fn writeJson(self: *Tree, writer: anytype, root: NodeId) !void {
+        try writeNodeJson(self, writer, root);
+    }
+
     fn appendChildren(self: *Tree, values: []const NodeId) !ChildRange {
         const start = self.children.items.len;
         try self.children.appendSlice(self.allocator(), values);
@@ -298,6 +304,161 @@ pub fn renderModel(
     }
 
     @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
+}
+
+/// Serializes a model into a structured JSON snapshot.
+///
+/// Compose-capable models emit their full scene graph, while legacy
+/// `view`-only models fall back to one plain text node so browser hosts still
+/// have something consistent to render.
+pub fn renderModelJson(
+    comptime ModelType: type,
+    allocator: std.mem.Allocator,
+    model: *const ModelType,
+    writer: anytype,
+) !void {
+    if (@hasDecl(ModelType, "compose")) {
+        var tree = Tree.init(allocator);
+        defer tree.deinit();
+
+        const root = try model.compose(&tree);
+        try tree.writeJson(writer, root);
+        return;
+    }
+
+    if (@hasDecl(ModelType, "view")) {
+        var frame_buffer: std.ArrayList(u8) = .empty;
+        defer frame_buffer.deinit(allocator);
+
+        try model.view(frame_buffer.writer(allocator));
+        try writer.writeAll("{\"kind\":\"text\",\"content\":");
+        try writeJsonString(writer, frame_buffer.items);
+        try writer.writeAll(",\"tone\":\"normal\",\"alignment\":\"left\"}");
+        return;
+    }
+
+    @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
+}
+
+// Emits one node and any recursive children as a browser-consumable JSON
+// object. This keeps the browser bridge thin while still reusing the real Zig
+// composition tree.
+fn writeNodeJson(tree: *const Tree, writer: anytype, node_id: NodeId) !void {
+    switch (tree.nodes.items[node_id]) {
+        .text => |text_node| {
+            try writer.writeAll("{\"kind\":\"text\",\"content\":");
+            try writeJsonString(writer, text_node.content);
+            try writer.writeAll(",\"tone\":");
+            try writeJsonEnumTag(writer, text_node.tone);
+            try writer.writeAll(",\"alignment\":");
+            try writeJsonEnumTag(writer, text_node.alignment);
+            try writer.writeByte('}');
+        },
+        .stack => |stack_node| {
+            try writer.writeAll("{\"kind\":");
+            try writeJsonString(writer, if (stack_node.axis == .horizontal) "row" else "column");
+            try writer.writeAll(",\"gap\":");
+            try writeJsonNumber(writer, stack_node.gap);
+            try writer.writeAll(",\"children\":[");
+
+            const children = tree.childrenFor(stack_node.children);
+            for (children, 0..) |child_id, index| {
+                if (index > 0) try writer.writeByte(',');
+                try writeNodeJson(tree, writer, child_id);
+            }
+
+            try writer.writeAll("]}");
+        },
+        .box => |box_node| {
+            try writer.writeAll("{\"kind\":\"box\",\"title\":");
+            if (box_node.title) |title| {
+                try writeJsonString(writer, title);
+            } else {
+                try writer.writeAll("null");
+            }
+            try writer.writeAll(",\"tone\":");
+            try writeJsonEnumTag(writer, box_node.tone);
+            try writer.writeAll(",\"alignment\":");
+            try writeJsonEnumTag(writer, box_node.alignment);
+            try writer.writeAll(",\"border\":");
+            try writeJsonEnumTag(writer, box_node.border);
+            try writer.writeAll(",\"padding\":");
+            try writeInsetsJson(writer, box_node.padding);
+            try writer.writeAll(",\"child\":");
+            try writeNodeJson(tree, writer, box_node.child);
+            try writer.writeByte('}');
+        },
+        .spacer => |spacer_node| {
+            try writer.writeAll("{\"kind\":\"spacer\",\"width\":");
+            try writeJsonNumber(writer, spacer_node.width);
+            try writer.writeAll(",\"height\":");
+            try writeJsonNumber(writer, spacer_node.height);
+            try writer.writeByte('}');
+        },
+        .rule => |rule_node| {
+            var glyph_buffer: [4]u8 = undefined;
+            const glyph_len = std.unicode.utf8Encode(rule_node.glyph, &glyph_buffer) catch unreachable;
+
+            try writer.writeAll("{\"kind\":\"rule\",\"width\":");
+            try writeJsonNumber(writer, rule_node.width);
+            try writer.writeAll(",\"glyph\":");
+            try writeJsonString(writer, glyph_buffer[0..glyph_len]);
+            try writer.writeAll(",\"tone\":");
+            try writeJsonEnumTag(writer, rule_node.tone);
+            try writer.writeByte('}');
+        },
+    }
+}
+
+// Stringifies one enum tag using its stable source-level name.
+fn writeJsonEnumTag(writer: anytype, value: anytype) !void {
+    try writeJsonString(writer, @tagName(value));
+}
+
+// Writes a JSON string with the standard escaping rules.
+fn writeJsonString(writer: anytype, value: []const u8) !void {
+    try writer.writeByte('"');
+
+    for (value) |byte| {
+        switch (byte) {
+            '"' => try writer.writeAll("\\\""),
+            '\\' => try writer.writeAll("\\\\"),
+            '\n' => try writer.writeAll("\\n"),
+            '\r' => try writer.writeAll("\\r"),
+            '\t' => try writer.writeAll("\\t"),
+            0x08 => try writer.writeAll("\\b"),
+            0x0c => try writer.writeAll("\\f"),
+            else => {
+                if (byte < 0x20) {
+                    var escape: [6]u8 = undefined;
+                    const slice = try std.fmt.bufPrint(&escape, "\\u00{x:0>2}", .{byte});
+                    try writer.writeAll(slice);
+                } else {
+                    try writer.writeByte(byte);
+                }
+            },
+        }
+    }
+
+    try writer.writeByte('"');
+}
+
+// Writes an unsigned JSON number.
+fn writeJsonNumber(writer: anytype, value: usize) !void {
+    try std.fmt.format(writer, "{d}", .{value});
+}
+
+// Serializes box padding explicitly so browser hosts can keep spacing intent.
+fn writeInsetsJson(writer: anytype, insets: Insets) !void {
+    try writer.writeAll("{\"top\":");
+    try writeJsonNumber(writer, insets.top);
+    try writer.writeAll(",\"right\":");
+    try writeJsonNumber(writer, insets.right);
+    try writer.writeAll(",\"bottom\":");
+    try writeJsonNumber(writer, insets.bottom);
+    try writer.writeAll(",\"left\":");
+    try writeJsonNumber(writer, insets.left);
+    try writer.writeByte('}');
 }
 
 // One rendered line plus its cached display width.
@@ -722,4 +883,45 @@ test "tree can render without ansi escapes" {
 
     try tree.render(buffer.writer(std.testing.allocator), text, .{ .ansi = false });
     try std.testing.expectEqualStrings("plain", buffer.items);
+}
+
+test "tree writes structured json snapshots" {
+    var tree = Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const title = try tree.textStyled("Framework", .{ .tone = .accent });
+    const status = try tree.text("Headless first");
+    const row = try tree.row(&.{ title, status }, .{ .gap = 2 });
+    const panel = try tree.box(row, .{
+        .title = "Demo",
+        .padding = Insets.symmetric(0, 1),
+        .tone = .accent,
+    });
+
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try tree.writeJson(buffer.writer(std.testing.allocator), panel);
+
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"box\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"row\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"title\":\"Demo\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"tone\":\"accent\"") != null);
+}
+
+test "renderModelJson falls back to plain text view models" {
+    const Model = struct {
+        pub fn view(_: *const @This(), writer: anytype) !void {
+            try writer.writeAll("plain fallback");
+        }
+    };
+
+    var model = Model{};
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try renderModelJson(Model, std.testing.allocator, &model, buffer.writer(std.testing.allocator));
+
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"text\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "plain fallback") != null);
 }

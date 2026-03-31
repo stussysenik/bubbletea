@@ -12,9 +12,10 @@
         <p class="eyebrow">bubbletea-zig</p>
         <h1>Browser host for the Zig rewrite</h1>
         <p class="lede">
-          The same headless runtime now boots inside a static web shell and
-          consumes keyboard, paste, focus, mouse, resize, and timer events
-          through the exported WASM bridge.
+          The same headless runtime now boots inside a static web shell,
+          exposes structured UI snapshots from Zig, and consumes keyboard,
+          paste, focus, mouse, resize, and timer events through the exported
+          WASM bridge.
         </p>
         <div class="status-row" aria-label="Runtime status">
           <span class="status-pill" id="status-runtime">loading runtime</span>
@@ -25,29 +26,44 @@
       </section>
 
       <section class="workspace">
-        <article class="panel terminal-panel">
-          <header class="panel-header">
-            <div>
-              <p class="panel-kicker">Showcase Surface</p>
-              <h2>WASM-backed terminal view</h2>
-            </div>
-            <button class="panel-action" id="focus-terminal" type="button">
-              Focus terminal
-            </button>
-          </header>
+        <div class="surface-stack">
+          <article class="panel terminal-panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Structured Surface</p>
+                <h2>DOM host from the Zig view tree</h2>
+              </div>
+              <button class="panel-action" id="focus-terminal" type="button">
+                Focus terminal
+              </button>
+            </header>
 
-          <div
-            class="terminal-shell"
-            id="terminal-shell"
-            tabindex="0"
-            role="application"
-            aria-label="Bubble Tea Zig showcase terminal"
-          >
-            <pre class="terminal-output" id="terminal-output"></pre>
-            <pre class="cell-measure" id="cell-measure" aria-hidden="true">MMMMMMMMMM
+            <div
+              class="terminal-shell"
+              id="terminal-shell"
+              tabindex="0"
+              role="application"
+              aria-label="Bubble Tea Zig showcase structured browser host"
+            >
+              <div class="tree-output" id="tree-output"></div>
+              <pre class="cell-measure" id="cell-measure" aria-hidden="true">MMMMMMMMMM
 MMMMMMMMMM</pre>
-          </div>
-        </article>
+            </div>
+          </article>
+
+          <article class="panel raw-panel">
+            <header class="panel-header">
+              <div>
+                <p class="panel-kicker">Debug Surface</p>
+                <h2>Raw text frame</h2>
+              </div>
+            </header>
+
+            <div class="raw-frame-shell">
+              <pre class="terminal-output terminal-output--raw" id="terminal-output"></pre>
+            </div>
+          </article>
+        </div>
 
         <aside class="panel notes-panel">
           <header class="panel-header">
@@ -58,11 +74,12 @@ MMMMMMMMMM</pre>
           </header>
 
           <ul class="notes-list">
+            <li>Structured snapshots come straight from the Zig UI tree.</li>
             <li>Normalized browser keys map onto the Zig runtime key enum.</li>
             <li>Paste uses the shared UTF-8 scratch buffer before dispatch.</li>
             <li>Mouse coordinates are projected into terminal cells.</li>
             <li>Resize derives columns and rows from measured mono cell size.</li>
-            <li>Frame updates stay text-first until the real web renderer lands.</li>
+            <li>The raw text frame stays visible as a renderer debug panel.</li>
           </ul>
 
           <div class="shortcuts">
