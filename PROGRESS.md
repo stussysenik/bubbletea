@@ -12,7 +12,7 @@ Generated from `automation/progress.json` on 2026-03-31.
 
 ## Overview
 
-A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and is structured to support WASM and future browser hosts.
+A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes editable, tabular, and form-driven UI primitives on top of a shared composable tree.
 
 - Status: `active`
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md)
@@ -25,11 +25,11 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 | Core runtime | Done | Single-threaded update loop, deterministic command scheduling, and terminal host live in zig/src/tea.zig. |
 | Headless runtime | Done | A host-agnostic runtime exists in zig/src/headless.zig for automation, tests, and non-terminal adapters. |
 | Composable UI tree | Done | A view tree with rows, columns, boxes, rules, and spacers exists in zig/src/ui.zig. |
-| Reusable components | Done | Spinner, list, badge, and progress bar components live in zig/src/components. |
+| Reusable components | Done | Spinner, list, badge, progress bar, text input, table, and form components now live in zig/src/components. |
 | Terminal styling | Done | The terminal renderer now respects view-tree tones while headless and WASM renders stay plain. |
 | WASM host exports | Done | A freestanding WASM module with init, resize, key, tick, and render exports exists in zig/src/wasm_showcase.zig. |
-| Advanced terminal input | In Progress | Arrow keys and basic key handling work, but mouse, bracketed paste, and richer terminal protocols still need to be ported. |
-| Higher-level app kit | Planned | Forms, tables, text input, inspectors, and richer layout/styling primitives are the next framework layer. |
+| Advanced terminal input | In Progress | A stateful decoder now handles buffered reads, split UTF-8, and CSI navigation keys, but mouse, bracketed paste, and richer terminal protocols still need to be ported. |
+| Higher-level app kit | In Progress | Text input, table, form, and shared focus primitives landed; inspectors and richer layout/styling primitives are the next framework layer. |
 | Browser renderer | Planned | The core is WASM-ready, but a DOM/SVG/Canvas renderer has not been built yet. |
 
 ## Verification
@@ -44,5 +44,5 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 
 - Port richer input events from Bubble Tea: mouse, paste, focus, and terminal capability negotiation.
 - Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.
-- Add first-class framework components for forms, text inputs, tables, and inspectors.
+- Add first-class framework components for inspectors, validation, and richer layout/styling primitives on top of the new form/focus layer.
 - Add a browser host that renders the same view tree from WASM-backed state.

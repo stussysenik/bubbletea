@@ -1,10 +1,12 @@
 const std = @import("std");
 
+/// Viewport dimensions seen by the host.
 pub const Size = struct {
     width: u16 = 80,
     height: u16 = 24,
 };
 
+/// Thin terminal wrapper for raw-mode setup, polling, and size queries.
 pub const Terminal = struct {
     stdin: std.fs.File = std.fs.File.stdin(),
     stdout: std.fs.File = std.fs.File.stdout(),
@@ -14,6 +16,7 @@ pub const Terminal = struct {
         return .{};
     }
 
+    /// Switches stdin into a non-canonical mode that delivers keys immediately.
     pub fn enableRawMode(self: *Terminal) !void {
         if (!self.stdin.isTty()) return;
 
@@ -37,6 +40,7 @@ pub const Terminal = struct {
         try std.posix.tcsetattr(self.stdin.handle, .FLUSH, raw);
     }
 
+    /// Restores the terminal when raw mode was previously enabled.
     pub fn restore(self: *Terminal) void {
         if (self.original_state) |state| {
             std.posix.tcsetattr(self.stdin.handle, .FLUSH, state) catch {};
@@ -48,6 +52,7 @@ pub const Terminal = struct {
         return std.posix.read(self.stdin.handle, buffer);
     }
 
+    /// Blocks until input is available or the timeout expires.
     pub fn pollInput(self: *const Terminal, timeout_ms: i32) !bool {
         var pollfds = [_]std.posix.pollfd{.{
             .fd = self.stdin.handle,
@@ -61,6 +66,8 @@ pub const Terminal = struct {
         };
     }
 
+    /// Returns the terminal size, falling back to a sensible default for
+    /// non-interactive hosts.
     pub fn size(self: *const Terminal) !Size {
         if (!self.stdout.isTty()) return .{};
 

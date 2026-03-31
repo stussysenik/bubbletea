@@ -1,12 +1,14 @@
 const std = @import("std");
 const ui = @import("../ui.zig");
 
+/// Simple percentage bar that renders entirely through the composable tree.
 pub const ProgressBar = struct {
     current: usize,
     total: usize,
     width: usize = 24,
     tone: ui.Tone = .accent,
 
+    /// Converts the progress state into styled text segments.
     pub fn compose(self: *const ProgressBar, tree: *ui.Tree) !ui.NodeId {
         const safe_total = @max(self.total, 1);
         const clamped_current = @min(self.current, safe_total);
@@ -31,6 +33,7 @@ pub const ProgressBar = struct {
     }
 };
 
+// Allocates a repeated byte slice for the current frame.
 fn repeated(allocator: std.mem.Allocator, value: u8, count: usize) ![]u8 {
     const buffer = try allocator.alloc(u8, count);
     @memset(buffer, value);

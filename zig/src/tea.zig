@@ -4,15 +4,21 @@ const ui = @import("ui.zig");
 const renderer_mod = @import("renderer.zig");
 const terminal_mod = @import("terminal.zig");
 
+/// Input key type re-exported from the decoder layer.
 pub const Key = input.Key;
+/// Terminal viewport size.
 pub const Size = terminal_mod.Size;
+/// Terminal renderer implementation.
 pub const Renderer = renderer_mod.Renderer;
+/// Terminal host abstraction.
 pub const Terminal = terminal_mod.Terminal;
 
+/// Timer identity passed back to models when delayed commands fire.
 pub const TimerMsg = struct {
     id: u64,
 };
 
+/// Standard runtime message envelope used by the interactive host.
 pub fn Message(comptime UserMsg: type) type {
     return union(enum) {
         none,
@@ -24,6 +30,7 @@ pub fn Message(comptime UserMsg: type) type {
     };
 }
 
+/// Command envelope that lets models emit messages or schedule timers.
 pub fn Cmd(comptime Msg: type) type {
     return union(enum) {
         none,
@@ -35,30 +42,36 @@ pub fn Cmd(comptime Msg: type) type {
     };
 }
 
+/// Result returned from `update`, including redraw and quit semantics.
 pub fn Update(comptime Msg: type) type {
     return struct {
         command: ?Cmd(Msg) = null,
         redraw: bool = true,
         quit: bool = false,
 
+        /// Leaves the model untouched and skips rendering work.
         pub fn noop() @This() {
             return .{ .redraw = false };
         }
 
+        /// Requests an additional command after the update completes.
         pub fn withCommand(command: Cmd(Msg)) @This() {
             return .{ .command = command };
         }
 
+        /// Exits the runtime after the current update cycle.
         pub fn quitNow() @This() {
             return .{ .quit = true };
         }
     };
 }
 
+/// Convenience wrapper for pushing a message back into the runtime.
 pub fn emit(comptime Msg: type, message: Msg) Cmd(Msg) {
     return .{ .emit = message };
 }
 
+/// Convenience wrapper for scheduling a delayed message on the timer queue.
 pub fn tickAfter(comptime Msg: type, delay_ns: u64, message: Msg) Cmd(Msg) {
     return .{
         .tick = .{
@@ -68,6 +81,7 @@ pub fn tickAfter(comptime Msg: type, delay_ns: u64, message: Msg) Cmd(Msg) {
     };
 }
 
+// Compact queue used for both pending messages and deterministic scheduling.
 fn Queue(comptime T: type) type {
     return struct {
         items: std.ArrayList(T) = .empty,
@@ -113,6 +127,8 @@ fn Queue(comptime T: type) type {
     };
 }
 
+/// Interactive terminal program that drives a model with decoded input,
+/// timers, resize events, and incremental rendering.
 pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
     comptime {
         if (!@hasDecl(ModelType, "update")) {
@@ -137,6 +153,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
         model: ModelType,
         terminal: Terminal = Terminal.init(),
         renderer: Renderer,
+        input_decoder: input.Decoder,
         pending: Queue(Msg) = .{},
         scheduled: std.ArrayList(ScheduledMessage) = .empty,
         frame_buffer: std.ArrayList(u8) = .empty,
@@ -152,6 +169,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             poll_interval_ms: i32 = 16,
         };
 
+        /// Creates a terminal program around the provided model instance.
         pub fn init(allocator: std.mem.Allocator, model: ModelType, options: Options) Self {
             const terminal = Terminal.init();
             return .{
@@ -163,21 +181,27 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                     .hide_cursor = true,
                     .ansi_enabled = terminal.stdout.isTty(),
                 }),
+                .input_decoder = input.Decoder.init(allocator),
                 .options = options,
             };
         }
 
+        /// Releases queues, renderer state, and buffered frames.
         pub fn deinit(self: *Self) void {
             self.pending.deinit(self.allocator);
             self.scheduled.deinit(self.allocator);
             self.frame_buffer.deinit(self.allocator);
+            self.input_decoder.deinit();
             self.renderer.deinit();
         }
 
+        /// Queues a message to be processed on the next event loop turn.
         pub fn send(self: *Self, msg: Msg) !void {
             try self.pending.push(self.allocator, msg);
         }
 
+        /// Boots the terminal host, runs init hooks, and stays in the event
+        /// loop until the model requests quit.
         pub fn run(self: *Self) !ModelType {
             if (self.options.use_raw_mode) {
                 try self.terminal.enableRawMode();
@@ -208,6 +232,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             return self.model;
         }
 
+        /// Routes one message through the model update function.
         fn processMessage(self: *Self, msg: Msg) !bool {
             if (msg == .quit) {
                 return true;
@@ -223,6 +248,8 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             return result.quit;
         }
 
+        /// Renders the current model snapshot through either `compose` or
+        /// `view`, then hands the frame to the terminal renderer.
         fn render(self: *Self) !void {
             try ui.renderModel(ModelType, self.allocator, &self.model, &self.frame_buffer, .{
                 .ansi = self.renderer.options.ansi_enabled,
@@ -231,9 +258,17 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             self.dirty = false;
         }
 
+        /// Pulls the next available message from pending work, decoded input,
+        /// timers, or resize polling.
         fn nextMessage(self: *Self) !?Msg {
             if (self.pending.pop()) |msg| {
                 return msg;
+            }
+
+            // Decoder state is drained before more syscalls so one read can
+            // yield multiple logical key events.
+            if (self.input_decoder.next()) |key| {
+                return .{ .key = key };
             }
 
             const now = nowNs();
@@ -246,7 +281,8 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                 var buffer: [32]u8 = undefined;
                 const read_len = try self.terminal.readInput(&buffer);
                 if (read_len > 0) {
-                    if (input.parse(buffer[0..read_len])) |key| {
+                    try self.input_decoder.feed(buffer[0..read_len]);
+                    if (self.input_decoder.next()) |key| {
                         return .{ .key = key };
                     }
                 }
@@ -262,9 +298,16 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                 return msg;
             }
 
+            // If polling timed out with a partial escape sequence buffered,
+            // treat it as a standalone key rather than waiting forever.
+            if (self.input_decoder.flush()) |key| {
+                return .{ .key = key };
+            }
+
             return null;
         }
 
+        /// Executes commands synchronously against the local queues.
         fn dispatchCommand(self: *Self, maybe_command: ?Command) !void {
             const command = maybe_command orelse return;
             switch (command) {
@@ -277,6 +320,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             }
         }
 
+        /// Removes the earliest scheduled message whose deadline has passed.
         fn popDueMessage(self: *Self, now: u64) ?Msg {
             var match_index: ?usize = null;
             var earliest_due: u64 = std.math.maxInt(u64);
@@ -296,6 +340,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             return null;
         }
 
+        /// Polls the terminal no longer than necessary when timers are queued.
         fn nextPollTimeout(self: *Self, now: u64) i32 {
             var timeout_ms = self.options.poll_interval_ms;
 
@@ -313,6 +358,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
     };
 }
 
+// Centralized timestamp helper keeps host logic testable.
 fn nowNs() u64 {
     return @intCast(std.time.nanoTimestamp());
 }

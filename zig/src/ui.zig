@@ -1,17 +1,21 @@
 const std = @import("std");
 
+/// Stable handle for nodes stored in the per-frame tree arena.
 pub const NodeId = u32;
 
+/// Stack direction for rows and columns.
 pub const Axis = enum {
     horizontal,
     vertical,
 };
 
+/// Border style supported by boxed nodes.
 pub const Border = enum {
     none,
     single,
 };
 
+/// Semantic styling tone understood by terminal and future browser hosts.
 pub const Tone = enum {
     normal,
     muted,
@@ -20,18 +24,21 @@ pub const Tone = enum {
     warning,
 };
 
+/// Horizontal alignment inside fixed-width regions.
 pub const Align = enum {
     left,
     center,
     right,
 };
 
+/// Edge padding for boxed content.
 pub const Insets = struct {
     top: usize = 0,
     right: usize = 0,
     bottom: usize = 0,
     left: usize = 0,
 
+    /// Applies the same padding to all four edges.
     pub fn all(value: usize) Insets {
         return .{
             .top = value,
@@ -41,6 +48,7 @@ pub const Insets = struct {
         };
     }
 
+    /// Applies separate vertical and horizontal padding values.
     pub fn symmetric(vertical: usize, horizontal: usize) Insets {
         return .{
             .top = vertical,
@@ -51,15 +59,18 @@ pub const Insets = struct {
     }
 };
 
+/// Styling options for text nodes.
 pub const TextOptions = struct {
     alignment: Align = .left,
     tone: Tone = .normal,
 };
 
+/// Shared stack options for rows and columns.
 pub const StackOptions = struct {
     gap: usize = 0,
 };
 
+/// Styling and layout options for boxed nodes.
 pub const BoxOptions = struct {
     title: ?[]const u8 = null,
     padding: Insets = .{},
@@ -68,11 +79,13 @@ pub const BoxOptions = struct {
     tone: Tone = .normal,
 };
 
+/// Options for horizontal rule nodes.
 pub const RuleOptions = struct {
     tone: Tone = .muted,
     glyph: u21 = '-',
 };
 
+/// Host-facing rendering flags.
 pub const RenderOptions = struct {
     ansi: bool = true,
 };
@@ -122,17 +135,20 @@ const Node = union(enum) {
     rule: RuleNode,
 };
 
+/// Arena-backed scene graph used to compose one frame at a time.
 pub const Tree = struct {
     arena_state: std.heap.ArenaAllocator,
     nodes: std.ArrayList(Node) = .empty,
     children: std.ArrayList(NodeId) = .empty,
 
+    /// Creates a tree whose allocations all die together after a frame render.
     pub fn init(parent_allocator: std.mem.Allocator) Tree {
         return .{
             .arena_state = std.heap.ArenaAllocator.init(parent_allocator),
         };
     }
 
+    /// Releases the arena and any node storage built during composition.
     pub fn deinit(self: *Tree) void {
         const arena = self.allocator();
         self.children.deinit(arena);
@@ -140,18 +156,22 @@ pub const Tree = struct {
         self.arena_state.deinit();
     }
 
+    /// Returns the allocator backing this frame tree.
     pub fn allocator(self: *Tree) std.mem.Allocator {
         return self.arena_state.allocator();
     }
 
+    /// Allocates a temporary node-id slice for bulk child construction.
     pub fn allocNodeIds(self: *Tree, count: usize) ![]NodeId {
         return self.allocator().alloc(NodeId, count);
     }
 
+    /// Creates an unstyled text node.
     pub fn text(self: *Tree, content: []const u8) !NodeId {
         return self.textStyled(content, .{});
     }
 
+    /// Creates a styled text node.
     pub fn textStyled(self: *Tree, content: []const u8, options: TextOptions) !NodeId {
         return self.appendNode(.{
             .text = .{
@@ -162,19 +182,23 @@ pub const Tree = struct {
         });
     }
 
+    /// Formats text directly into the frame arena.
     pub fn format(self: *Tree, comptime fmt: []const u8, args: anytype) !NodeId {
         const content = try std.fmt.allocPrint(self.allocator(), fmt, args);
         return self.text(content);
     }
 
+    /// Creates a horizontal stack.
     pub fn row(self: *Tree, children: []const NodeId, options: StackOptions) !NodeId {
         return self.stack(.horizontal, children, options);
     }
 
+    /// Creates a vertical stack.
     pub fn column(self: *Tree, children: []const NodeId, options: StackOptions) !NodeId {
         return self.stack(.vertical, children, options);
     }
 
+    /// Creates a stack node shared by rows and columns.
     pub fn stack(self: *Tree, axis: Axis, children: []const NodeId, options: StackOptions) !NodeId {
         return self.appendNode(.{
             .stack = .{
@@ -185,6 +209,7 @@ pub const Tree = struct {
         });
     }
 
+    /// Wraps a child in padding, borders, and an optional title.
     pub fn box(self: *Tree, child: NodeId, options: BoxOptions) !NodeId {
         return self.appendNode(.{
             .box = .{
@@ -198,6 +223,7 @@ pub const Tree = struct {
         });
     }
 
+    /// Creates a fixed-size blank region.
     pub fn spacer(self: *Tree, width: usize, height: usize) !NodeId {
         return self.appendNode(.{
             .spacer = .{
@@ -207,6 +233,7 @@ pub const Tree = struct {
         });
     }
 
+    /// Creates a divider line rendered with a repeated glyph.
     pub fn rule(self: *Tree, width: usize, options: RuleOptions) !NodeId {
         return self.appendNode(.{
             .rule = .{
@@ -217,6 +244,7 @@ pub const Tree = struct {
         });
     }
 
+    /// Renders the tree root into any writer.
     pub fn render(self: *Tree, writer: anytype, root: NodeId, options: RenderOptions) !void {
         var block = try renderNode(self, root, .{ .ansi = options.ansi });
         defer block.deinit();
@@ -243,6 +271,7 @@ pub const Tree = struct {
     }
 };
 
+/// Renders a model through `compose` when present, or falls back to `view`.
 pub fn renderModel(
     comptime ModelType: type,
     allocator: std.mem.Allocator,
@@ -271,6 +300,7 @@ pub fn renderModel(
     @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
 }
 
+// One rendered line plus its cached display width.
 const Line = struct {
     bytes: std.ArrayList(u8) = .empty,
     width: usize = 0,
@@ -331,6 +361,7 @@ const Line = struct {
     }
 };
 
+// Intermediate block used by the tree renderer before the host consumes bytes.
 const Block = struct {
     allocator: std.mem.Allocator,
     lines: std.ArrayList(Line) = .empty,
@@ -373,10 +404,12 @@ const Block = struct {
     }
 };
 
+// Rendering currently only needs to know whether ANSI styling is enabled.
 const RenderContext = struct {
     ansi: bool,
 };
 
+// Dispatches node rendering by variant.
 fn renderNode(tree: *Tree, node_id: NodeId, ctx: RenderContext) std.mem.Allocator.Error!Block {
     const allocator = tree.allocator();
     return switch (tree.nodes.items[node_id]) {
@@ -388,6 +421,7 @@ fn renderNode(tree: *Tree, node_id: NodeId, ctx: RenderContext) std.mem.Allocato
     };
 }
 
+// Splits a text node into one or more rendered lines.
 fn renderText(allocator: std.mem.Allocator, text_node: TextNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     var block = Block.init(allocator);
     var lines = std.mem.splitScalar(u8, text_node.content, '\n');
@@ -404,6 +438,7 @@ fn renderText(allocator: std.mem.Allocator, text_node: TextNode, ctx: RenderCont
     return block;
 }
 
+// Spacers produce blank rectangular blocks.
 fn renderSpacer(allocator: std.mem.Allocator, spacer_node: SpacerNode) std.mem.Allocator.Error!Block {
     var block = Block.init(allocator);
     block.width = spacer_node.width;
@@ -416,6 +451,7 @@ fn renderSpacer(allocator: std.mem.Allocator, spacer_node: SpacerNode) std.mem.A
     return block;
 }
 
+// Rules repeat one glyph across a single line.
 fn renderRule(allocator: std.mem.Allocator, rule_node: RuleNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     var block = Block.init(allocator);
     const width = if (rule_node.width == 0) 1 else rule_node.width;
@@ -435,6 +471,7 @@ fn renderRule(allocator: std.mem.Allocator, rule_node: RuleNode, ctx: RenderCont
     return block;
 }
 
+// Rows and columns are laid out eagerly into rectangular blocks.
 fn renderStack(tree: *Tree, stack_node: StackNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     const allocator = tree.allocator();
     var block = Block.init(allocator);
@@ -517,6 +554,7 @@ fn renderStack(tree: *Tree, stack_node: StackNode, ctx: RenderContext) std.mem.A
     return block;
 }
 
+// Boxes wrap an inner block with optional borders, padding, and a title row.
 fn renderBox(tree: *Tree, box_node: BoxNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     const allocator = tree.allocator();
     var child_block = try renderNode(tree, box_node.child, ctx);
@@ -575,6 +613,7 @@ fn renderBox(tree: *Tree, box_node: BoxNode, ctx: RenderContext) std.mem.Allocat
     return block;
 }
 
+// Appends one padded content line inside a box.
 fn appendBoxLine(
     block: *Block,
     inner_width: usize,
@@ -602,6 +641,7 @@ fn appendBoxLine(
     try block.lines.append(block.allocator, line);
 }
 
+// Aligns a child line inside a fixed-width slot.
 fn appendAlignedLine(
     target: *Line,
     allocator: std.mem.Allocator,
@@ -628,12 +668,15 @@ fn appendAlignedLine(
     try target.appendRepeat(allocator, ' ', right_padding);
 }
 
+// Codepoint count is the current display-width approximation.
 fn displayWidth(text: []const u8) usize {
     return std.unicode.utf8CountCodepoints(text) catch text.len;
 }
 
+// Reset sequence appended after styled spans.
 const ansi_reset = "\x1b[0m";
 
+// Maps semantic tones to ANSI color/style prefixes.
 fn tonePrefix(tone: Tone) []const u8 {
     return switch (tone) {
         .normal => "",

@@ -2,6 +2,8 @@ const std = @import("std");
 const tea = @import("tea.zig");
 const ui = @import("ui.zig");
 
+// Same compact queue strategy as the terminal runtime, but without any host
+// dependencies.
 fn Queue(comptime T: type) type {
     return struct {
         items: std.ArrayList(T) = .empty,
@@ -47,6 +49,7 @@ fn Queue(comptime T: type) type {
     };
 }
 
+/// Host-agnostic runtime for tests, automation, and WASM adapters.
 pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
     comptime {
         if (!@hasDecl(ModelType, "update")) {
@@ -85,6 +88,7 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
         const Self = @This();
         pub const StepStatus = Step;
 
+        /// Creates a deterministic runtime around a model instance.
         pub fn init(allocator: std.mem.Allocator, model: ModelType) Self {
             return .{
                 .allocator = allocator,
@@ -92,12 +96,14 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             };
         }
 
+        /// Releases queues and frame buffers owned by the headless host.
         pub fn deinit(self: *Self) void {
             self.pending.deinit(self.allocator);
             self.scheduled.deinit(self.allocator);
             self.frame_buffer.deinit(self.allocator);
         }
 
+        /// Runs model init exactly once, mirroring the interactive runtime.
         pub fn boot(self: *Self) !void {
             if (self.initialized) return;
             self.initialized = true;
@@ -107,21 +113,26 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             }
         }
 
+        /// Queues a message for the next `step` or `drain` call.
         pub fn send(self: *Self, msg: Msg) !void {
             try self.pending.push(self.allocator, msg);
         }
 
+        /// Advances time by a delta and drains all resulting work.
         pub fn advanceBy(self: *Self, delta_ns: u64) !bool {
             self.now_ns += delta_ns;
             return self.drain();
         }
 
+        /// Moves the clock to an absolute timestamp and drains due work.
         pub fn advanceTo(self: *Self, target_ns: u64) !bool {
             if (target_ns < self.now_ns) return error.TimeCannotGoBackwards;
             self.now_ns = target_ns;
             return self.drain();
         }
 
+        /// Processes queued and due work until the runtime becomes idle or
+        /// quits.
         pub fn drain(self: *Self) !bool {
             try self.boot();
 
@@ -134,6 +145,7 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             }
         }
 
+        /// Executes at most one logical step of work.
         pub fn step(self: *Self) !StepStatus {
             try self.boot();
 
@@ -148,21 +160,25 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             return .idle;
         }
 
+        /// Renders the current frame into any writer without ANSI escapes.
         pub fn render(self: *Self, writer: anytype) !void {
             try self.ensureFrame();
             try writer.writeAll(self.frame_buffer.items);
         }
 
+        /// Copies the current frame into a caller-owned buffer.
         pub fn snapshot(self: *Self, allocator: std.mem.Allocator) ![]u8 {
             try self.ensureFrame();
             return allocator.dupe(u8, self.frame_buffer.items);
         }
 
+        /// Returns the cached frame bytes for inspection-heavy callers.
         pub fn frame(self: *Self) ![]const u8 {
             try self.ensureFrame();
             return self.frame_buffer.items;
         }
 
+        /// Rebuilds the cached frame only when the model marked itself dirty.
         fn ensureFrame(self: *Self) !void {
             if (!self.dirty) return;
 
@@ -172,6 +188,8 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             self.dirty = false;
         }
 
+        /// Routes one message through the model and applies any returned
+        /// command.
         fn processMessage(self: *Self, msg: Msg) !bool {
             if (msg == .quit) {
                 return true;
@@ -187,6 +205,7 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             return result.quit;
         }
 
+        /// Handles emit and timer commands against local queues.
         fn dispatchCommand(self: *Self, maybe_command: ?Command) !void {
             const command = maybe_command orelse return;
             switch (command) {
@@ -199,6 +218,7 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             }
         }
 
+        /// Returns the earliest timer whose deadline has passed.
         fn popDueMessage(self: *Self) ?Msg {
             var match_index: ?usize = null;
             var earliest_due: u64 = std.math.maxInt(u64);

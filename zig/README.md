@@ -18,10 +18,12 @@ What is here:
 
 - A single-threaded event loop in [`src/tea.zig`](./src/tea.zig)
 - A headless runtime in [`src/headless.zig`](./src/headless.zig)
+- A shared focus utility in [`src/focus.zig`](./src/focus.zig)
 - A composable cross-host view tree in [`src/ui.zig`](./src/ui.zig)
+- A stateful terminal input decoder in [`src/input.zig`](./src/input.zig)
 - Raw terminal setup and size polling in [`src/terminal.zig`](./src/terminal.zig)
 - A line-diff ANSI renderer in [`src/renderer.zig`](./src/renderer.zig)
-- Reusable components in [`src/components`](./src/components)
+- Reusable components in [`src/components`](./src/components), including text input, table, and form primitives
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
 - A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig)

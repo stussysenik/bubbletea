@@ -2,6 +2,7 @@ const std = @import("std");
 const tea = @import("../tea.zig");
 const ui = @import("../ui.zig");
 
+/// Timer-driven spinner with no background threads or host-specific state.
 pub const Spinner = struct {
     frames: []const []const u8 = &default_frames,
     frame_index: usize = 0,
@@ -15,10 +16,12 @@ pub const Spinner = struct {
         "/",
     };
 
+    /// Binds the spinner to a timer identifier inside the program runtime.
     pub fn init(timer_id: u64) Spinner {
         return .{ .timer_id = timer_id };
     }
 
+    /// Returns the next timer command needed to advance the spinner.
     pub fn tick(self: *const Spinner, comptime Msg: type) tea.Cmd(Msg) {
         return tea.tickAfter(Msg, self.interval_ns, .{
             .timer = .{
@@ -27,6 +30,7 @@ pub const Spinner = struct {
         });
     }
 
+    /// Consumes matching timer messages and schedules the next frame.
     pub fn update(self: *Spinner, comptime Msg: type, msg: Msg) ?tea.Cmd(Msg) {
         switch (msg) {
             .timer => |timer| {
@@ -38,10 +42,12 @@ pub const Spinner = struct {
         }
     }
 
+    /// Returns the frame currently selected by the timer loop.
     pub fn frame(self: *const Spinner) []const u8 {
         return self.frames[self.frame_index];
     }
 
+    /// Exposes the current frame to the UI tree.
     pub fn compose(self: *const Spinner, tree: *ui.Tree) !ui.NodeId {
         return tree.text(self.frame());
     }

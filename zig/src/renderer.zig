@@ -1,11 +1,13 @@
 const std = @import("std");
 
+/// Runtime knobs for the terminal renderer.
 pub const Options = struct {
     alt_screen: bool = true,
     hide_cursor: bool = true,
     ansi_enabled: bool = true,
 };
 
+/// Minimal line-diff renderer that only rewrites rows whose text changed.
 pub const Renderer = struct {
     allocator: std.mem.Allocator,
     stdout: std.fs.File,
@@ -25,6 +27,7 @@ pub const Renderer = struct {
         self.previous_frame.deinit(self.allocator);
     }
 
+    /// Enables terminal modes needed for full-screen rendering.
     pub fn start(self: *Renderer) !void {
         if (self.started or !self.options.ansi_enabled) {
             self.started = true;
@@ -46,6 +49,7 @@ pub const Renderer = struct {
         self.started = true;
     }
 
+    /// Restores cursor visibility and screen state when the program exits.
     pub fn stop(self: *Renderer) !void {
         if (!self.started or !self.options.ansi_enabled) {
             self.started = false;
@@ -69,16 +73,22 @@ pub const Renderer = struct {
         self.started = false;
     }
 
+    /// Writes either the whole frame or a row-level diff depending on host
+    /// capabilities.
     pub fn render(self: *Renderer, frame: []const u8) !void {
         if (std.mem.eql(u8, self.previous_frame.items, frame)) return;
 
         if (!self.options.ansi_enabled) {
+            // Headless and piped output stay plain so tests and non-TTY hosts
+            // can snapshot the frame directly.
             try self.stdout.writeAll(frame);
             self.previous_frame.clearRetainingCapacity();
             try self.previous_frame.appendSlice(self.allocator, frame);
             return;
         }
 
+        // ANSI rendering rewrites only rows whose contents changed between
+        // frames.
         var output: std.ArrayList(u8) = .empty;
         defer output.deinit(self.allocator);
 
