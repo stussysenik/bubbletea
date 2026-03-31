@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.7.0...zig-v0.8.0) (2026-03-31)
+
+
+### Features
+
+* **zig/ui:** add measured layout bounds for browser host ([fcbe90b](https://github.com/stussysenik/bubbletea/commit/fcbe90b471bc8580f7ba7a76d092c6b77c746fb3))
+
 # [0.7.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.6.0...zig-v0.7.0) (2026-03-31)
 
 
