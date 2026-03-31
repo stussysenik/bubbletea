@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.14.0...zig-v0.15.0) (2026-03-31)
+
+
+### Features
+
+* **zig/automation:** add openspec rewrite roadmap ([248b8ea](https://github.com/stussysenik/bubbletea/commit/248b8eabbd7f79540aff7b075353805f1160dd2f))
+
 # [0.14.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.13.0...zig-v0.14.0) (2026-03-31)
 
 
