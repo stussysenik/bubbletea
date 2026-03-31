@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.13.0...zig-v0.14.0) (2026-03-31)
+
+
+### Features
+
+* **zig/web:** add form field targeting ([327ec72](https://github.com/stussysenik/bubbletea/commit/327ec72b14dc316716a3fbdbca6dfffba6d48340))
+
 # [0.13.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.12.0...zig-v0.13.0) (2026-03-31)
 
 
