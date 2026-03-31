@@ -57,6 +57,12 @@ pub const BrowserRegion = enum(u8) {
     form = 4,
 };
 
+/// Browser-visible item actions routed through the static web host.
+pub const BrowserAction = enum(u8) {
+    list_item = 1,
+    menu_item = 2,
+};
+
 const scaffold_items = [_]ScaffoldMenu.Item{
     .{ .label = "Terminal Tool", .detail = "single-binary CLI scaffold with native widgets", .tone = .accent },
     .{ .label = "Shared CLI + WASM", .detail = "one model reused across terminal and browser hosts", .tone = .warning },
@@ -276,7 +282,7 @@ pub fn App(comptime Msg: type) type {
             );
 
             const list_panel = try tree.box(
-                try self.list.compose(tree),
+                try self.list.composeWithOptions(tree, .{ .action_kind = listActionName() }),
                 .{
                     .title = if (self.focus.isFocused(zone_list)) "Visible Areas (focused)" else "Visible Areas",
                     .region = listRegionName(),
@@ -286,7 +292,7 @@ pub fn App(comptime Msg: type) type {
             );
 
             const menu_panel = try tree.box(
-                try self.scaffold_menu.compose(tree),
+                try self.scaffold_menu.composeWithOptions(tree, .{ .action_kind = menuActionName() }),
                 .{
                     .title = if (self.focus.isFocused(zone_menu)) "Scaffold Presets (focused)" else "Scaffold Presets",
                     .region = menuRegionName(),
@@ -432,6 +438,31 @@ pub fn App(comptime Msg: type) type {
             if (changed) self.syncFocus();
             return changed;
         }
+
+        /// Handles one browser-originated item action against the showcase.
+        pub fn triggerBrowserAction(self: *Self, action: BrowserAction, value: usize) bool {
+            return switch (action) {
+                .list_item => self.selectVisibleRow(value),
+                .menu_item => self.activatePresetFromBrowser(value),
+            };
+        }
+
+        // Selects a visible roadmap row and moves focus into the list panel.
+        fn selectVisibleRow(self: *Self, index: usize) bool {
+            if (!self.list.setSelected(index)) return false;
+            _ = self.focus.focus(zone_list);
+            self.syncFocus();
+            return true;
+        }
+
+        // Applies one scaffold preset directly from a browser click.
+        fn activatePresetFromBrowser(self: *Self, index: usize) bool {
+            if (!self.scaffold_menu.setSelected(index)) return false;
+            self.applySelectedPreset();
+            _ = self.focus.focus(zone_form);
+            self.syncFocus();
+            return true;
+        }
     };
 }
 
@@ -448,6 +479,16 @@ fn listRegionName() []const u8 {
 // Stable browser-facing region label for the menu panel.
 fn menuRegionName() []const u8 {
     return @tagName(BrowserRegion.menu);
+}
+
+// Stable browser-facing action label for list rows.
+fn listActionName() []const u8 {
+    return @tagName(BrowserAction.list_item);
+}
+
+// Stable browser-facing action label for scaffold menu items.
+fn menuActionName() []const u8 {
+    return @tagName(BrowserAction.menu_item);
 }
 
 // Stable browser-facing region label for the form panel.
@@ -682,6 +723,34 @@ test "showcase can focus browser regions directly" {
     try std.testing.expect(program.model.focusBrowserRegion(.form));
     try std.testing.expect(program.model.focus.isFocused(zone_form));
     try std.testing.expect(program.model.draft.active);
+}
+
+test "showcase browser actions can select visible rows" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.triggerBrowserAction(.list_item, 1));
+    try std.testing.expect(program.model.focus.isFocused(zone_list));
+    try std.testing.expectEqual(@as(usize, 1), program.model.list.selected);
+}
+
+test "showcase browser actions can activate scaffold presets" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.triggerBrowserAction(.menu_item, 1));
+    try std.testing.expect(program.model.focus.isFocused(zone_form));
+    try std.testing.expectEqualStrings("bubbletea-zig-unified", program.model.draft.valueById("name").?);
+    try std.testing.expectEqualStrings("zig build run && zig build wasm", program.model.draft.valueById("command").?);
+    try std.testing.expectEqualStrings("cli + wasm", program.model.draft.valueById("target").?);
 }
 
 test "showcase menu applies scaffold presets" {

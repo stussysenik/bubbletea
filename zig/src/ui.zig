@@ -74,6 +74,7 @@ pub const StackOptions = struct {
 pub const BoxOptions = struct {
     title: ?[]const u8 = null,
     region: ?[]const u8 = null,
+    action: ?Action = null,
     padding: Insets = .{},
     border: Border = .single,
     alignment: Align = .left,
@@ -108,10 +109,17 @@ const StackNode = struct {
     gap: usize,
 };
 
+/// Browser-facing action metadata attached to interactive UI regions.
+pub const Action = struct {
+    kind: []const u8,
+    value: usize,
+};
+
 const BoxNode = struct {
     child: NodeId,
     title: ?[]const u8,
     region: ?[]const u8,
+    action: ?Action,
     padding: Insets,
     border: Border,
     alignment: Align,
@@ -239,6 +247,7 @@ pub const Tree = struct {
                 .child = child,
                 .title = options.title,
                 .region = options.region,
+                .action = options.action,
                 .padding = options.padding,
                 .border = options.border,
                 .alignment = options.alignment,
@@ -434,6 +443,12 @@ fn writeNodeJsonAt(tree: *const Tree, writer: anytype, node_id: NodeId, origin: 
             } else {
                 try writer.writeAll("null");
             }
+            try writer.writeAll(",\"action\":");
+            if (box_node.action) |action| {
+                try writeActionJson(writer, action);
+            } else {
+                try writer.writeAll("null");
+            }
             try writer.writeAll(",\"layout\":");
             try writeLayoutJson(writer, makeFrame(origin, size));
             try writer.writeAll(",\"tone\":");
@@ -510,6 +525,15 @@ fn writeJsonString(writer: anytype, value: []const u8) !void {
 // Writes an unsigned JSON number.
 fn writeJsonNumber(writer: anytype, value: usize) !void {
     try std.fmt.format(writer, "{d}", .{value});
+}
+
+// Serializes one interactive action target for browser hosts.
+fn writeActionJson(writer: anytype, action: Action) !void {
+    try writer.writeAll("{\"kind\":");
+    try writeJsonString(writer, action.kind);
+    try writer.writeAll(",\"value\":");
+    try writeJsonNumber(writer, action.value);
+    try writer.writeByte('}');
 }
 
 // Serializes one measured node frame.
@@ -1112,6 +1136,10 @@ test "tree writes structured json snapshots" {
         .{
             .title = "Row",
             .region = "list",
+            .action = .{
+                .kind = "select_row",
+                .value = 1,
+            },
             .padding = Insets.symmetric(0, 1),
         },
     );
@@ -1123,6 +1151,7 @@ test "tree writes structured json snapshots" {
 
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"box\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"region\":\"list\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"select_row\",\"value\":1}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"row\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":0,\"y\":0,\"width\":11,\"height\":3}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":7,\"y\":1,\"width\":2,\"height\":1}") != null);

@@ -20,6 +20,11 @@ const REGION_CODES = Object.freeze({
   form: 4,
 });
 
+const ACTION_CODES = Object.freeze({
+  list_item: 1,
+  menu_item: 2,
+});
+
 const POINTER_BUTTONS = Object.freeze({
   0: 1,
   1: 2,
@@ -230,6 +235,7 @@ function sendPasteText(text) {
 function handleMouseDown(event) {
   focusTerminal();
   focusRegionFromEvent(event);
+  dispatchActionFromEvent(event);
   event.preventDefault();
   dispatchMouse(event, POINTER_ACTIONS.press);
 }
@@ -486,6 +492,11 @@ function buildBoxNode(node, metrics) {
     element.dataset.region = node.region;
     element.classList.add("ui-region");
   }
+  if (node.action) {
+    element.dataset.actionKind = node.action.kind;
+    element.dataset.actionValue = String(node.action.value);
+    element.classList.add("ui-action");
+  }
 
   if (node.title) {
     const title = document.createElement("div");
@@ -542,12 +553,41 @@ function focusRegionFromEvent(event) {
   sendRuntime(() => state.exports.bt_focus_region(regionCode), `region ${regionName}`);
 }
 
+function dispatchActionFromEvent(event) {
+  if (!state.exports) return;
+
+  const action = actionFromEvent(event);
+  if (!action) return;
+
+  const actionCode = ACTION_CODES[action.kind];
+  if (!actionCode) return;
+
+  const value = Number.parseInt(action.value, 10);
+  if (!Number.isFinite(value)) return;
+
+  sendRuntime(() => state.exports.bt_send_action(actionCode, value), `action ${action.kind}:${value}`);
+}
+
 function regionNameFromEvent(event) {
   const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
   for (const element of elementsAtPoint) {
     const regionHost = element.closest?.("[data-region]");
     if (regionHost?.dataset.region) {
       return regionHost.dataset.region;
+    }
+  }
+  return null;
+}
+
+function actionFromEvent(event) {
+  const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
+  for (const element of elementsAtPoint) {
+    const actionHost = element.closest?.("[data-action-kind]");
+    if (actionHost?.dataset.actionKind) {
+      return {
+        kind: actionHost.dataset.actionKind,
+        value: actionHost.dataset.actionValue ?? "",
+      };
     }
   }
   return null;

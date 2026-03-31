@@ -8,6 +8,11 @@ pub const List = struct {
     selected: usize = 0,
     empty_label: []const u8 = "(no results)",
 
+    /// Optional composition-time metadata for browser-targetable list rows.
+    pub const ComposeOptions = struct {
+        action_kind: ?[]const u8 = null,
+    };
+
     /// Creates a list over a caller-owned item slice.
     pub fn init(items: []const []const u8) List {
         return .{
@@ -74,6 +79,13 @@ pub const List = struct {
         return self.items[self.selected];
     }
 
+    /// Selects an explicit row index when it exists.
+    pub fn setSelected(self: *List, index: usize) bool {
+        if (index >= self.items.len) return false;
+        self.selected = index;
+        return true;
+    }
+
     /// Plain text rendering used by tests and non-tree hosts.
     pub fn view(self: *const List, writer: anytype) !void {
         if (self.items.len == 0) {
@@ -89,6 +101,12 @@ pub const List = struct {
 
     /// Composes the list as styled rows inside the shared view tree.
     pub fn compose(self: *const List, tree: *ui.Tree) !ui.NodeId {
+        return self.composeWithOptions(tree, .{});
+    }
+
+    /// Composes the list and optionally tags each row with browser action
+    /// metadata.
+    pub fn composeWithOptions(self: *const List, tree: *ui.Tree, options: ComposeOptions) !ui.NodeId {
         if (self.items.len == 0) {
             return tree.textStyled(self.empty_label, .{ .tone = .muted });
         }
@@ -104,7 +122,17 @@ pub const List = struct {
                 try tree.textStyled(item, .{ .tone = .success })
             else
                 try tree.text(item);
-            rows[index] = try tree.row(&.{ marker, label }, .{ .gap = 1 });
+            const row = try tree.row(&.{ marker, label }, .{ .gap = 1 });
+            rows[index] = if (options.action_kind) |action_kind|
+                try tree.box(row, .{
+                    .action = .{
+                        .kind = action_kind,
+                        .value = index,
+                    },
+                    .border = .none,
+                })
+            else
+                row;
         }
 
         return tree.column(rows, .{ .gap = 0 });
@@ -142,4 +170,20 @@ test "list reacts to mouse wheel navigation" {
         .action = .scroll,
     }));
     try std.testing.expectEqual(@as(usize, 0), list.selected);
+}
+
+test "list can compose browser action metadata" {
+    const items = [_][]const u8{ "one", "two" };
+    const list = List.init(&items);
+
+    var tree = ui.Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const root = try list.composeWithOptions(&tree, .{ .action_kind = "list_item" });
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try tree.writeJson(buffer.writer(std.testing.allocator), root);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"list_item\",\"value\":0}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"list_item\",\"value\":1}") != null);
 }

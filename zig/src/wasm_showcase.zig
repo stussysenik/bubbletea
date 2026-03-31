@@ -115,6 +115,15 @@ pub export fn bt_focus_region(region_code: u8) bool {
     return refreshBuffers();
 }
 
+/// Invokes one browser-tagged showcase action directly from the web host.
+pub export fn bt_send_action(action_code: u8, value: u16) bool {
+    const action = decodeAction(action_code) orelse return false;
+    const p = getProgram() orelse return false;
+
+    if (!p.model.triggerBrowserAction(action, value)) return false;
+    return refreshBuffers();
+}
+
 /// Sends one normalized mouse event from the browser host.
 ///
 /// `button_code` maps to:
@@ -277,6 +286,15 @@ fn decodeRegion(code: u8) ?showcase.BrowserRegion {
         @intFromEnum(showcase.BrowserRegion.list) => .list,
         @intFromEnum(showcase.BrowserRegion.menu) => .menu,
         @intFromEnum(showcase.BrowserRegion.form) => .form,
+        else => null,
+    };
+}
+
+// Maps browser-facing showcase action ids back to interactive item handlers.
+fn decodeAction(code: u8) ?showcase.BrowserAction {
+    return switch (code) {
+        @intFromEnum(showcase.BrowserAction.list_item) => .list_item,
+        @intFromEnum(showcase.BrowserAction.menu_item) => .menu_item,
         else => null,
     };
 }
