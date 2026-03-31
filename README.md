@@ -29,6 +29,45 @@ To get started, see the tutorial below, the [examples][examples], the
 > Upgrading from v1? Check out the [upgrade guide](./UPGRADE_GUIDE_V2.md), or
 > point your LLM at it and let it go to town.
 
+## Zig Rewrite Status
+
+<!-- zig-rewrite:start -->
+- Status: `active`
+- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and is structured to support WASM and future browser hosts.
+- Progress Board: 6 done, 1 in progress, 2 planned
+- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md)
+- Default Verification: `cd zig && zig build`, `cd zig && zig build test`, `cd zig && zig build wasm`
+- Release Flow: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
+<!-- zig-rewrite:end -->
+
+## Contents
+
+<!-- toc:start -->
+- [Zig Rewrite Status](#zig-rewrite-status)
+- [By the way](#by-the-way)
+- [Tutorial](#tutorial)
+  - [Enough! Let's get to it.](#enough-lets-get-to-it)
+  - [The Model](#the-model)
+- [Initialization](#initialization)
+  - [The Update Method](#the-update-method)
+  - [The View Method](#the-view-method)
+  - [All Together Now](#all-together-now)
+- [What’s Next?](#whats-next)
+- [Debugging](#debugging)
+  - [Debugging with Delve](#debugging-with-delve)
+  - [Logging Stuff](#logging-stuff)
+- [Libraries we use with Bubble Tea](#libraries-we-use-with-bubble-tea)
+- [Bubble Tea in the Wild](#bubble-tea-in-the-wild)
+  - [Staff favourites](#staff-favourites)
+  - [In Industry](#in-industry)
+  - [Charm stuff](#charm-stuff)
+  - [There’s so much more where that came from](#theres-so-much-more-where-that-came-from)
+- [Contributing](#contributing)
+- [Feedback](#feedback)
+- [Acknowledgments](#acknowledgments)
+- [License](#license)
+<!-- toc:end -->
+
 ## By the way
 
 Be sure to check out [Bubbles][bubbles], a library of common UI components for Bubble Tea.

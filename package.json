@@ -1,0 +1,21 @@
+{
+  "name": "bubbletea-zig-automation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:sync": "node scripts/update-docs.mjs",
+    "docs:check": "node scripts/update-docs.mjs --check",
+    "release": "semantic-release",
+    "release:dry-run": "semantic-release --dry-run --no-ci"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "6.0.3",
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/git": "10.0.1",
+    "@semantic-release/release-notes-generator": "14.1.0",
+    "semantic-release": "24.2.8"
+  },
+  "overrides": {
+    "lodash-es": "4.17.21"
+  }
+}

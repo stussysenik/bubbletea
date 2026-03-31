@@ -1,0 +1,91 @@
+{
+  "project": {
+    "name": "bubbletea-zig",
+    "status": "active",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and is structured to support WASM and future browser hosts.",
+    "docs": {
+      "readme": "./README.md",
+      "zig_readme": "./zig/README.md",
+      "progress": "./PROGRESS.md"
+    },
+    "release": {
+      "strategy": "semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.",
+      "tag_format": "zig-v${version}"
+    }
+  },
+  "milestones": [
+    {
+      "name": "Core runtime",
+      "status": "done",
+      "details": "Single-threaded update loop, deterministic command scheduling, and terminal host live in zig/src/tea.zig."
+    },
+    {
+      "name": "Headless runtime",
+      "status": "done",
+      "details": "A host-agnostic runtime exists in zig/src/headless.zig for automation, tests, and non-terminal adapters."
+    },
+    {
+      "name": "Composable UI tree",
+      "status": "done",
+      "details": "A view tree with rows, columns, boxes, rules, and spacers exists in zig/src/ui.zig."
+    },
+    {
+      "name": "Reusable components",
+      "status": "done",
+      "details": "Spinner, list, badge, and progress bar components live in zig/src/components."
+    },
+    {
+      "name": "Terminal styling",
+      "status": "done",
+      "details": "The terminal renderer now respects view-tree tones while headless and WASM renders stay plain."
+    },
+    {
+      "name": "WASM host exports",
+      "status": "done",
+      "details": "A freestanding WASM module with init, resize, key, tick, and render exports exists in zig/src/wasm_showcase.zig."
+    },
+    {
+      "name": "Advanced terminal input",
+      "status": "in_progress",
+      "details": "Arrow keys and basic key handling work, but mouse, bracketed paste, and richer terminal protocols still need to be ported."
+    },
+    {
+      "name": "Higher-level app kit",
+      "status": "planned",
+      "details": "Forms, tables, text input, inspectors, and richer layout/styling primitives are the next framework layer."
+    },
+    {
+      "name": "Browser renderer",
+      "status": "planned",
+      "details": "The core is WASM-ready, but a DOM/SVG/Canvas renderer has not been built yet."
+    }
+  ],
+  "verification": [
+    {
+      "command": "cd zig && zig build",
+      "purpose": "Verify the native showcase builds."
+    },
+    {
+      "command": "cd zig && zig build test",
+      "purpose": "Run Zig unit tests across the runtime, UI tree, and components."
+    },
+    {
+      "command": "cd zig && zig build wasm",
+      "purpose": "Verify the freestanding WASM module is emitted successfully."
+    },
+    {
+      "command": "cd zig && printf 'q' | zig build run | sed -n '1,12p'",
+      "purpose": "Smoke-test the CLI host in non-interactive mode."
+    },
+    {
+      "command": "npm run docs:check",
+      "purpose": "Verify generated docs, status blocks, and markdown tables of contents are current."
+    }
+  ],
+  "next": [
+    "Port richer input events from Bubble Tea: mouse, paste, focus, and terminal capability negotiation.",
+    "Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.",
+    "Add first-class framework components for forms, text inputs, tables, and inspectors.",
+    "Add a browser host that renders the same view tree from WASM-backed state."
+  ]
+}

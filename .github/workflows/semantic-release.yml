@@ -1,0 +1,32 @@
+name: semantic-release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.15.2
+      - run: npm ci
+      - run: npm run docs:check
+      - run: cd zig && zig build
+      - run: cd zig && zig build test
+      - run: cd zig && zig build wasm
+      - run: npm run release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

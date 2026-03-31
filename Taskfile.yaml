@@ -3,6 +3,16 @@
 version: '3'
 
 tasks:
+  docs:
+    desc: Sync generated docs and progress files
+    cmds:
+      - npm run docs:sync
+
+  docs-check:
+    desc: Check generated docs and progress files
+    cmds:
+      - npm run docs:check
+
   lint:
     desc: Run lint
     cmds:
@@ -12,3 +22,30 @@ tasks:
     desc: Run tests
     cmds:
       - go test ./... {{.CLI_ARGS}}
+
+  zig-build:
+    desc: Build the Zig showcase
+    cmds:
+      - cd zig && zig build
+
+  zig-test:
+    desc: Run Zig tests
+    cmds:
+      - cd zig && zig build test
+
+  zig-wasm:
+    desc: Build the Zig WASM module
+    cmds:
+      - cd zig && zig build wasm
+
+  zig-all:
+    desc: Run the full Zig verification set
+    cmds:
+      - cd zig && zig build
+      - cd zig && zig build test
+      - cd zig && zig build wasm
+
+  release-dry:
+    desc: Run semantic-release in dry-run mode
+    cmds:
+      - npm run release:dry-run
