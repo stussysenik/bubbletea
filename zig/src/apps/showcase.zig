@@ -5,6 +5,7 @@ const FocusRing = @import("../focus.zig").FocusRing;
 const ui = @import("../ui.zig");
 const Badge = @import("../components/badge.zig").Badge;
 const Form = @import("../components/form.zig").Form;
+const Inspector = @import("../components/inspector.zig").Inspector;
 const ProgressBar = @import("../components/progress.zig").ProgressBar;
 const Spinner = @import("../components/spinner.zig").Spinner;
 const List = @import("../components/list.zig").List;
@@ -272,10 +273,16 @@ pub fn App(comptime Msg: type) type {
 
             const selected = self.selectedRow();
             const selection_badge = try Badge.init(selectedStatus(selected), toneForStatus(selectedStatus(selected))).compose(tree);
-            const selection_area = try tree.textStyled(selectedArea(selected), .{ .tone = .accent });
-            const selection_note = try tree.textStyled(selectedNote(selected), .{ .tone = .muted });
+            const selection_entries = [_]Inspector.Entry{
+                .{ .label = "area", .value = selectedArea(selected), .tone = .accent },
+                .{ .label = "note", .value = selectedNote(selected), .tone = .muted },
+            };
+            const selection_inspector = Inspector{
+                .entries = &selection_entries,
+                .gap = 1,
+            };
             const selection_panel = try tree.box(
-                try tree.column(&.{ selection_badge, selection_area, selection_note }, .{ .gap = 1 }),
+                try tree.column(&.{ selection_badge, try selection_inspector.compose(tree) }, .{ .gap = 1 }),
                 .{
                     .title = "Selection",
                     .padding = ui.Insets.symmetric(0, 1),
@@ -283,21 +290,17 @@ pub fn App(comptime Msg: type) type {
                 },
             );
 
-            const preview_lines = try tree.allocNodeIds(3);
-            preview_lines[0] = try tree.textStyled(
-                try std.fmt.allocPrint(tree.allocator(), "name: {s}", .{displayValue(self.draft.valueById("name"), "bubbletea-zig-admin")}),
-                .{ .tone = .accent },
-            );
-            preview_lines[1] = try tree.textStyled(
-                try std.fmt.allocPrint(tree.allocator(), "command: {s}", .{displayValue(self.draft.valueById("command"), "zig build run")}),
-                .{ .tone = .success },
-            );
-            preview_lines[2] = try tree.textStyled(
-                try std.fmt.allocPrint(tree.allocator(), "target: {s}", .{displayValue(self.draft.valueById("target"), "cli + wasm")}),
-                .{ .tone = .warning },
-            );
+            const preview_entries = [_]Inspector.Entry{
+                .{ .label = "name", .value = displayValue(self.draft.valueById("name"), "bubbletea-zig-admin"), .tone = .accent },
+                .{ .label = "command", .value = displayValue(self.draft.valueById("command"), "zig build run"), .tone = .success },
+                .{ .label = "target", .value = displayValue(self.draft.valueById("target"), "cli + wasm"), .tone = .warning },
+            };
+            const preview_inspector = Inspector{
+                .entries = &preview_entries,
+                .gap = 1,
+            };
             const preview_panel = try tree.box(
-                try tree.column(preview_lines, .{ .gap = 0 }),
+                try preview_inspector.compose(tree),
                 .{
                     .title = "Scaffold Preview",
                     .padding = ui.Insets.symmetric(0, 1),

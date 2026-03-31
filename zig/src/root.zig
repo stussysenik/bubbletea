@@ -34,6 +34,7 @@ pub const Program = tea.Program;
 /// Reusable UI widgets built on top of the shared view tree.
 pub const components = struct {
     pub const Badge = @import("components/badge.zig").Badge;
+    pub const Inspector = @import("components/inspector.zig").Inspector;
     pub const Spinner = @import("components/spinner.zig").Spinner;
     pub const List = @import("components/list.zig").List;
     pub const ProgressBar = @import("components/progress.zig").ProgressBar;
@@ -54,6 +55,7 @@ test {
     _ = @import("ui.zig");
     _ = @import("headless.zig");
     _ = @import("components/badge.zig");
+    _ = @import("components/inspector.zig");
     _ = @import("components/spinner.zig");
     _ = @import("components/list.zig");
     _ = @import("components/progress.zig");

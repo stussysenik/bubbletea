@@ -12,10 +12,14 @@ const Msg = tea.Message(void);
 const App = showcase.App(Msg);
 const Program = tea.HeadlessProgram(App, void);
 const allocator = std.heap.wasm_allocator;
+const input_capacity = 4096;
 
 // Global host state kept alive across JS calls.
 var program: ?Program = null;
 var render_buffer: std.ArrayList(u8) = .empty;
+// Browser hosts can copy UTF-8 text into this scratch space before calling
+// `bt_send_paste`.
+var input_buffer: [input_capacity]u8 = [_]u8{0} ** input_capacity;
 
 /// Initializes the headless showcase and produces the first frame.
 pub export fn bt_init() bool {
@@ -53,6 +57,68 @@ pub export fn bt_resize(width: u16, height: u16) bool {
 pub export fn bt_send_key(code: u32) bool {
     const p = getProgram() orelse return false;
     p.send(.{ .key = decodeKey(code) }) catch return false;
+    _ = p.drain() catch return false;
+    return refreshRenderBuffer();
+}
+
+/// Returns a writable pointer to the shared UTF-8 input scratch buffer.
+pub export fn bt_input_ptr() [*]u8 {
+    return &input_buffer;
+}
+
+/// Returns the capacity of the shared UTF-8 input scratch buffer.
+pub export fn bt_input_capacity() usize {
+    return input_capacity;
+}
+
+/// Sends UTF-8 bytes from the shared scratch buffer as one paste event.
+pub export fn bt_send_paste(len: usize) bool {
+    if (len > input_capacity) return false;
+    const text = input_buffer[0..len];
+    if (!isValidUtf8(text)) return false;
+
+    const p = getProgram() orelse return false;
+    p.send(.{ .paste = text }) catch return false;
+    _ = p.drain() catch return false;
+    return refreshRenderBuffer();
+}
+
+/// Reports whether the browser host is focused, mirroring terminal focus
+/// events.
+pub export fn bt_set_focus(focused: bool) bool {
+    const p = getProgram() orelse return false;
+    p.send(if (focused) .focus_gained else .focus_lost) catch return false;
+    _ = p.drain() catch return false;
+    return refreshRenderBuffer();
+}
+
+/// Sends one normalized mouse event from the browser host.
+///
+/// `button_code` maps to:
+/// 0 none, 1 left, 2 middle, 3 right, 4 wheel_up, 5 wheel_down,
+/// 6 wheel_left, 7 wheel_right.
+///
+/// `action_code` maps to:
+/// 1 press, 2 release, 3 drag, 4 move, 5 scroll.
+///
+/// `modifiers` uses bit flags:
+/// 1 shift, 2 alt, 4 ctrl.
+pub export fn bt_send_mouse(button_code: u8, action_code: u8, x: u16, y: u16, modifiers: u8) bool {
+    const button = decodeMouseButton(button_code) orelse return false;
+    const action = decodeMouseAction(action_code) orelse return false;
+    const p = getProgram() orelse return false;
+
+    p.send(.{ .mouse = .{
+        .x = x,
+        .y = y,
+        .button = button,
+        .action = action,
+        .modifiers = .{
+            .shift = (modifiers & 1) != 0,
+            .alt = (modifiers & 2) != 0,
+            .ctrl = (modifiers & 4) != 0,
+        },
+    } }) catch return false;
     _ = p.drain() catch return false;
     return refreshRenderBuffer();
 }
@@ -119,4 +185,43 @@ fn decodeKey(code: u32) tea.Key {
         else
             .{ .unknown = @intCast(@min(code, 255)) },
     };
+}
+
+// Maps browser-level button identifiers back to runtime mouse buttons.
+fn decodeMouseButton(code: u8) ?tea.MouseButton {
+    return switch (code) {
+        0 => .none,
+        1 => .left,
+        2 => .middle,
+        3 => .right,
+        4 => .wheel_up,
+        5 => .wheel_down,
+        6 => .wheel_left,
+        7 => .wheel_right,
+        else => null,
+    };
+}
+
+// Maps browser-level action identifiers back to runtime mouse actions.
+fn decodeMouseAction(code: u8) ?tea.MouseAction {
+    return switch (code) {
+        1 => .press,
+        2 => .release,
+        3 => .drag,
+        4 => .move,
+        5 => .scroll,
+        else => null,
+    };
+}
+
+// Validates a UTF-8 payload before it is forwarded as a paste event.
+fn isValidUtf8(text: []const u8) bool {
+    var index: usize = 0;
+    while (index < text.len) {
+        const sequence_len = std.unicode.utf8ByteSequenceLength(text[index]) catch return false;
+        if (index + sequence_len > text.len) return false;
+        _ = std.unicode.utf8Decode(text[index .. index + sequence_len]) catch return false;
+        index += sequence_len;
+    }
+    return true;
 }
