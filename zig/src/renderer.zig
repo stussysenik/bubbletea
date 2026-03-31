@@ -1,5 +1,6 @@
 const std = @import("std");
 const cell_width = @import("cell_width.zig");
+const ui = @import("ui.zig");
 
 /// Runtime knobs for the terminal renderer.
 pub const Options = struct {
@@ -25,6 +26,8 @@ pub const Renderer = struct {
     stdout: std.fs.File,
     previous_frame: std.ArrayList(u8) = .empty,
     previous_cells: CellBuffer = .{},
+    last_cursor: ?Cursor = null,
+    cursor_visible: bool = false,
     started: bool = false,
     options: Options,
 
@@ -45,6 +48,8 @@ pub const Renderer = struct {
     pub fn start(self: *Renderer) !void {
         self.previous_frame.clearRetainingCapacity();
         self.previous_cells.clearRetainingCapacity();
+        self.last_cursor = null;
+        self.cursor_visible = !self.options.hide_cursor;
 
         if (self.started or !self.options.ansi_enabled) {
             self.started = true;
@@ -116,7 +121,7 @@ pub const Renderer = struct {
 
     /// Writes either the whole frame or a row-level diff depending on host
     /// capabilities.
-    pub fn render(self: *Renderer, frame: []const u8) !void {
+    pub fn render(self: *Renderer, frame: []const u8, cursor: ?Cursor) !void {
         if (!self.options.ansi_enabled) {
             if (std.mem.eql(u8, self.previous_frame.items, frame)) return;
 
@@ -133,18 +138,29 @@ pub const Renderer = struct {
         var next_cells = CellBuffer{};
         defer next_cells.deinit(self.allocator);
         try next_cells.parse(self.allocator, frame);
-        if (self.previous_cells.eql(&next_cells)) return;
+        const cells_changed = !self.previous_cells.eql(&next_cells);
+        const cursor_changed = !cursorEqual(self.last_cursor, cursor);
+        if (!cells_changed and !cursor_changed) return;
 
         var output: std.ArrayList(u8) = .empty;
         defer output.deinit(self.allocator);
-        try writeCellDiff(&output, self.allocator, &self.previous_cells, &next_cells);
+        if (cells_changed) {
+            try writeCellDiff(&output, self.allocator, &self.previous_cells, &next_cells);
+        }
+        try writeCursorState(&output, self.allocator, cursor, &self.cursor_visible);
 
         try self.stdout.writeAll(output.items);
-        self.previous_cells.deinit(self.allocator);
-        self.previous_cells = next_cells;
-        next_cells = .{};
+        if (cells_changed) {
+            self.previous_cells.deinit(self.allocator);
+            self.previous_cells = next_cells;
+            next_cells = .{};
+        }
+        self.last_cursor = cursor;
     }
 };
+
+/// Terminal cursor position reported by the shared UI renderer.
+pub const Cursor = ui.Cursor;
 
 // Terminal styling tracked per visible cell instead of per full line.
 const CellStyle = enum(u8) {
@@ -449,9 +465,37 @@ fn cellsEqual(left_buffer: *const CellBuffer, left: Cell, right_buffer: *const C
     return std.mem.eql(u8, left_buffer.glyphSlice(left), right_buffer.glyphSlice(right));
 }
 
+fn cursorEqual(left: ?Cursor, right: ?Cursor) bool {
+    if (left == null and right == null) return true;
+    if (left == null or right == null) return false;
+    return left.?.x == right.?.x and left.?.y == right.?.y;
+}
+
 // Emits a 1-based terminal cursor move.
 fn appendCursorMove(writer: anytype, row: usize, col: usize) !void {
     try std.fmt.format(writer, "\x1b[{d};{d}H", .{ row, col });
+}
+
+// Applies cursor visibility and movement after any cell updates.
+fn writeCursorState(
+    output: *std.ArrayList(u8),
+    allocator: std.mem.Allocator,
+    cursor: ?Cursor,
+    cursor_visible: *bool,
+) !void {
+    if (cursor) |value| {
+        if (!cursor_visible.*) {
+            try output.appendSlice(allocator, "\x1b[?25h");
+            cursor_visible.* = true;
+        }
+        try appendCursorMove(output.writer(allocator), value.y + 1, value.x + 1);
+        return;
+    }
+
+    if (cursor_visible.*) {
+        try output.appendSlice(allocator, "\x1b[?25l");
+        cursor_visible.* = false;
+    }
 }
 
 // Emits the visible glyph for one cell into the diff stream.
@@ -561,4 +605,24 @@ test "cell diff preserves wide glyph clusters" {
 
     try writeCellDiff(&output, std.testing.allocator, &previous, &next);
     try std.testing.expectEqualStrings("\x1b[1;2H漢", output.items);
+}
+
+test "cursor state shows and positions the real terminal cursor" {
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    var visible = false;
+    try writeCursorState(&output, std.testing.allocator, .{ .x = 4, .y = 1 }, &visible);
+    try std.testing.expect(visible);
+    try std.testing.expectEqualStrings("\x1b[?25h\x1b[2;5H", output.items);
+}
+
+test "cursor state hides the terminal cursor when absent" {
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    var visible = true;
+    try writeCursorState(&output, std.testing.allocator, null, &visible);
+    try std.testing.expect(!visible);
+    try std.testing.expectEqualStrings("\x1b[?25l", output.items);
 }

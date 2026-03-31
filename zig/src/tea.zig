@@ -273,10 +273,10 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
         /// Renders the current model snapshot through either `compose` or
         /// `view`, then hands the frame to the terminal renderer.
         fn render(self: *Self) !void {
-            try ui.renderModel(ModelType, self.allocator, &self.model, &self.frame_buffer, .{
+            const cursor = try ui.renderModelWithCursor(ModelType, self.allocator, &self.model, &self.frame_buffer, .{
                 .ansi = self.renderer.options.ansi_enabled,
             });
-            try self.renderer.render(self.frame_buffer.items);
+            try self.renderer.render(self.frame_buffer.items, cursor);
             self.dirty = false;
         }
 

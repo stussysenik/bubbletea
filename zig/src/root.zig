@@ -3,6 +3,7 @@ const tea = @import("tea.zig");
 /// Public package surface for the Zig rewrite.
 pub const input = @import("input.zig");
 pub const focus = @import("focus.zig");
+pub const cell_width = @import("cell_width.zig");
 pub const ui = @import("ui.zig");
 pub const renderer = @import("renderer.zig");
 pub const terminal = @import("terminal.zig");
@@ -52,6 +53,7 @@ pub const apps = struct {
 test {
     _ = @import("input.zig");
     _ = @import("focus.zig");
+    _ = @import("cell_width.zig");
     _ = @import("tea.zig");
     _ = @import("ui.zig");
     _ = @import("headless.zig");

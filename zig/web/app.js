@@ -469,9 +469,13 @@ function buildCursorNode(node, metrics) {
   const element = document.createElement("div");
   element.className = `ui-node ui-cursor tone-${node.tone}`;
   applyNodeLayout(element, node.layout, metrics, {
-    exactWidth: true,
     exactHeight: true,
   });
+  const caretWidth = Math.max(2, Math.round(metrics.cellWidth * 0.14));
+  element.style.width = "0px";
+  element.style.minWidth = "0px";
+  element.style.borderLeftWidth = `${caretWidth}px`;
+  element.style.marginRight = `${-caretWidth}px`;
   return element;
 }
 

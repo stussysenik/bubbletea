@@ -228,8 +228,10 @@ body {
 }
 
 .ui-cursor {
-  border-radius: 0.12rem;
-  background: currentColor;
+  width: 0;
+  min-width: 0 !important;
+  border-left-style: solid;
+  border-left-color: currentColor;
   opacity: 0.95;
   animation: ui-cursor-blink 1s steps(1, end) infinite;
 }

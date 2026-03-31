@@ -96,6 +96,12 @@ pub const RenderOptions = struct {
 /// Shared display-width helper used by layout-sensitive components.
 pub const displayWidth = cell_width.displayWidth;
 
+/// Terminal-space cursor position derived from the composed view tree.
+pub const Cursor = struct {
+    x: usize,
+    y: usize,
+};
+
 const ChildRange = struct {
     start: usize,
     len: usize,
@@ -297,9 +303,15 @@ pub const Tree = struct {
 
     /// Renders the tree root into any writer.
     pub fn render(self: *Tree, writer: anytype, root: NodeId, options: RenderOptions) !void {
+        _ = try self.renderWithCursor(writer, root, options);
+    }
+
+    /// Renders the tree root and reports any semantic cursor position.
+    pub fn renderWithCursor(self: *Tree, writer: anytype, root: NodeId, options: RenderOptions) !?Cursor {
         var block = try renderNode(self, root, .{ .ansi = options.ansi });
         defer block.deinit();
         try block.writeTo(writer);
+        return block.cursor;
     }
 
     /// Serializes one frame tree into a JSON structure suitable for browser
@@ -336,6 +348,18 @@ pub fn renderModel(
     frame_buffer: *std.ArrayList(u8),
     options: RenderOptions,
 ) !void {
+    _ = try renderModelWithCursor(ModelType, allocator, model, frame_buffer, options);
+}
+
+/// Renders a model and returns any semantic cursor position from the composed
+/// tree.
+pub fn renderModelWithCursor(
+    comptime ModelType: type,
+    allocator: std.mem.Allocator,
+    model: *const ModelType,
+    frame_buffer: *std.ArrayList(u8),
+    options: RenderOptions,
+) !?Cursor {
     frame_buffer.clearRetainingCapacity();
 
     if (@hasDecl(ModelType, "compose")) {
@@ -344,14 +368,13 @@ pub fn renderModel(
 
         const root = try model.compose(&tree);
         const writer = frame_buffer.writer(allocator);
-        try tree.render(writer, root, options);
-        return;
+        return try tree.renderWithCursor(writer, root, options);
     }
 
     if (@hasDecl(ModelType, "view")) {
         const writer = frame_buffer.writer(allocator);
         try model.view(writer);
-        return;
+        return null;
     }
 
     @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
@@ -602,7 +625,7 @@ fn makeFrame(origin: LayoutOrigin, size: LayoutSize) LayoutFrame {
 fn measureNode(tree: *const Tree, node_id: NodeId) LayoutSize {
     return switch (tree.nodes.items[node_id]) {
         .text => |text_node| measureTextContent(text_node.content),
-        .cursor => .{ .width = 1, .height = 1 },
+        .cursor => .{ .width = 0, .height = 1 },
         .stack => |stack_node| measureStack(tree, stack_node),
         .box => |box_node| measureBox(box_node, measureNode(tree, box_node.child)),
         .spacer => |spacer_node| .{
@@ -798,6 +821,7 @@ const Block = struct {
     allocator: std.mem.Allocator,
     lines: std.ArrayList(Line) = .empty,
     width: usize = 0,
+    cursor: ?Cursor = null,
 
     fn init(allocator: std.mem.Allocator) Block {
         return .{ .allocator = allocator };
@@ -875,14 +899,16 @@ fn renderText(allocator: std.mem.Allocator, text_node: TextNode, ctx: RenderCont
 // solid block so the caret is not mistaken for model text.
 fn renderCursor(allocator: std.mem.Allocator, cursor_node: CursorNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     var block = Block.init(allocator);
-    var line = Line{};
 
     if (ctx.ansi) {
-        try line.appendStyledSliceWithMode(allocator, "█", cursor_node.tone, true);
-    } else {
-        try line.appendStyledSliceWithMode(allocator, "|", cursor_node.tone, false);
+        _ = try block.appendEmptyLine();
+        block.cursor = .{ .x = 0, .y = 0 };
+        block.width = 0;
+        return block;
     }
 
+    var line = Line{};
+    try line.appendStyledSliceWithMode(allocator, "|", cursor_node.tone, false);
     block.width = 1;
     try block.lines.append(allocator, line);
     return block;
@@ -953,6 +979,12 @@ fn renderStack(tree: *Tree, stack_node: StackNode, ctx: RenderContext) std.mem.A
                         try block.appendBlankLine(block.width);
                     }
                 }
+                if (child_block.cursor) |cursor| {
+                    block.cursor = .{
+                        .x = cursor.x,
+                        .y = block.lines.items.len + cursor.y,
+                    };
+                }
                 for (child_block.lines.items) |*child_line| {
                     var line = Line{};
                     try line.appendLine(allocator, child_line);
@@ -968,12 +1000,23 @@ fn renderStack(tree: *Tree, stack_node: StackNode, ctx: RenderContext) std.mem.A
         .horizontal => {
             var total_width: usize = 0;
             var max_height: usize = 0;
+            var cursor_x: usize = 0;
             for (rendered.items, 0..) |child_block, index| {
                 total_width += child_block.width;
                 if (index + 1 < rendered.items.len) {
                     total_width += stack_node.gap;
                 }
                 max_height = @max(max_height, child_block.height());
+                if (child_block.cursor) |cursor| {
+                    block.cursor = .{
+                        .x = cursor_x + cursor.x,
+                        .y = cursor.y,
+                    };
+                }
+                cursor_x += child_block.width;
+                if (index + 1 < rendered.items.len) {
+                    cursor_x += stack_node.gap;
+                }
             }
 
             block.width = total_width;
@@ -1039,6 +1082,14 @@ fn renderBox(tree: *Tree, box_node: BoxNode, ctx: RenderContext) std.mem.Allocat
     }
 
     const inner_width = body_width - box_node.padding.left - box_node.padding.right;
+    const child_left_offset = alignedOffset(box_node.alignment, inner_width, child_block.width);
+    if (child_block.cursor) |cursor| {
+        const inset = borderInset(box_node.border);
+        block.cursor = .{
+            .x = inset + box_node.padding.left + child_left_offset + cursor.x,
+            .y = inset + box_node.padding.top + cursor.y,
+        };
+    }
     for (child_block.lines.items) |*child_line| {
         try appendBoxLine(&block, inner_width, child_line, box_node.padding.left, box_node.padding.right, box_node.border, box_node.alignment, box_node.tone, ctx);
     }
