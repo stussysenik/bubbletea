@@ -12,7 +12,7 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 
 ## Release Line
 
-- Latest Zig Tag: `zig-v0.10.0`
+- Latest Zig Tag: `zig-v0.11.0`
 - Tag Format: `zig-v${version}`
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 - Live Status: Run `npm run release:status` for the current head commit and recent Zig-native commit subjects.
