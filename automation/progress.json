@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer with wide-glyph handling, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -51,7 +51,7 @@
     {
       "name": "Terminal styling",
       "status": "done",
-      "details": "The terminal renderer now respects view-tree tones through a styled cell buffer while headless and WASM renders stay plain."
+      "details": "The terminal renderer now respects view-tree tones through a styled cell buffer, handles wide glyphs safely, and can drive the real terminal cursor while headless and WASM renders stay plain."
     },
     {
       "name": "WASM host exports",
@@ -79,6 +79,7 @@
       "name": "Runtime and Scheduling",
       "status": "done",
       "paths": [
+        "zig/src/cell_width.zig",
         "zig/src/tea.zig",
         "zig/src/headless.zig",
         "zig/src/terminal.zig"
@@ -115,8 +116,8 @@
         "zig/src/ui.zig",
         "zig/src/cell_width.zig"
       ],
-      "shipped": "ANSI rendering now parses the composed frame into styled cells, diffs per-glyph runs instead of whole lines, keeps wide glyphs and combining sequences aligned to real terminal columns, and still enables the terminal modes needed for richer input.",
-      "next": "Add true grapheme-cluster edge cases, cursor-state rendering that can drive the real terminal cursor, and host-specific effects on top of the new cell grid."
+      "shipped": "ANSI rendering now parses the composed frame into styled cells, diffs per-glyph runs instead of whole lines, keeps wide glyphs and combining sequences aligned to real terminal columns, and can drive the real terminal cursor from semantic cursor nodes in the shared tree.",
+      "next": "Add tougher grapheme-cluster edge cases, terminal cursor shape/blink control, and host-specific effects on top of the new cell grid."
     },
     {
       "name": "Components and App Kit",
@@ -187,7 +188,7 @@
   ],
   "next": [
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
-    "Add true grapheme-cluster edge cases and real terminal-cursor state on top of the new wide-glyph-safe cell-buffer renderer.",
+    "Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
     "Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
