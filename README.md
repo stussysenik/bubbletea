@@ -36,7 +36,7 @@ To get started, see the tutorial below, the [examples][examples], the
 - Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds from the same WASM-backed runtime.
 - Progress Board: 6 done, 3 in progress, 0 planned
 - Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md)
-- Latest Zig Tag: `zig-v0.6.0`
+- Latest Zig Tag: `zig-v0.7.0`
 - Default Verification: `cd zig && zig build`, `cd zig && zig build test`, `cd zig && zig build wasm`
 - Release Flow: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
 - Commit Discipline: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
