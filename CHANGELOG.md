@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.4.0...zig-v0.5.0) (2026-03-31)
+
+
+### Features
+
+* **zig:** add inspector component and richer wasm input ([b0c1102](https://github.com/stussysenik/bubbletea/commit/b0c11026a6b9e2902fa9816f30e177d2c7069725))
+
 # [0.4.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.3.0...zig-v0.4.0) (2026-03-31)
 
 
