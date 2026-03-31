@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.5.0...zig-v0.6.0) (2026-03-31)
+
+
+### Features
+
+* **zig/components:** add form validation and scaffold menus ([f4ac7da](https://github.com/stussysenik/bubbletea/commit/f4ac7da90a2f5bae34b0aed3d4030ae4dd984797))
+
 # [0.5.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.4.0...zig-v0.5.0) (2026-03-31)
 
 
