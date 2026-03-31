@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -51,7 +51,7 @@
     {
       "name": "Terminal styling",
       "status": "done",
-      "details": "The terminal renderer now respects view-tree tones while headless and WASM renders stay plain."
+      "details": "The terminal renderer now respects view-tree tones through a styled cell buffer while headless and WASM renders stay plain."
     },
     {
       "name": "WASM host exports",
@@ -113,8 +113,8 @@
         "zig/src/renderer.zig",
         "zig/src/ui.zig"
       ],
-      "shipped": "ANSI rendering is incremental at the line level and now enables the terminal modes needed for richer input.",
-      "next": "Replace line diffing with a cell buffer so short edits, cursor motion, and host-specific effects get cheaper and more precise."
+      "shipped": "ANSI rendering now parses the composed frame into styled cells, diffs per-glyph runs instead of whole lines, and still enables the terminal modes needed for richer input.",
+      "next": "Add wide-cell/grapheme awareness, cursor-state rendering, and host-specific effects on top of the new cell grid."
     },
     {
       "name": "Components and App Kit",
@@ -184,7 +184,7 @@
   ],
   "next": [
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
-    "Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.",
+    "Add wide-cell/grapheme handling and cursor-aware effects on top of the new cell-buffer renderer.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
     "Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
