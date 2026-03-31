@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.12.0...zig-v0.13.0) (2026-03-31)
+
+
+### Features
+
+* **zig/input:** add kitty keyboard support ([85394f1](https://github.com/stussysenik/bubbletea/commit/85394f123f3643ec147b43b4c65dfc6ed9b7c162))
+
 # [0.12.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.11.0...zig-v0.12.0) (2026-03-31)
 
 
