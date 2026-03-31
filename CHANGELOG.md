@@ -1,3 +1,11 @@
+# [0.7.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.6.0...zig-v0.7.0) (2026-03-31)
+
+
+### Features
+
+* **zig/wasm:** add static browser showcase host ([0a846e4](https://github.com/stussysenik/bubbletea/commit/0a846e411a2e07198e061101655630b164080b11))
+* **zig/web:** render structured wasm snapshots in dom ([1e7590b](https://github.com/stussysenik/bubbletea/commit/1e7590b71213fd63d4164b420dd65cfe43dbda06))
+
 # [0.6.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.5.0...zig-v0.6.0) (2026-03-31)
 
 
