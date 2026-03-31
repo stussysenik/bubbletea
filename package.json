@@ -5,6 +5,7 @@
   "scripts": {
     "docs:sync": "node scripts/update-docs.mjs",
     "docs:check": "node scripts/update-docs.mjs --check",
+    "release:status": "node scripts/release-status.mjs",
     "release": "semantic-release",
     "release:dry-run": "semantic-release --dry-run --no-ci"
   },

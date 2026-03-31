@@ -15,8 +15,11 @@ Generated from `automation/progress.json` on 2026-03-31.
 A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input plus editable, tabular, and form-driven UI primitives on top of a shared composable tree.
 
 - Status: `active`
-- Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md)
+- Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md)
 - Release Strategy: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
+- Latest Zig Tag: `zig-v0.3.0`
+- Latest Zig Commit: `6dd1d1e` feat(zig): add protocol-aware terminal input
+- Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 
 ## Status Board
 
@@ -38,11 +41,12 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 - `cd zig && zig build test`: Run Zig unit tests across the runtime, UI tree, and components.
 - `cd zig && zig build wasm`: Verify the freestanding WASM module is emitted successfully.
 - `cd zig && printf 'q' | zig build run | sed -n '1,12p'`: Smoke-test the CLI host in non-interactive mode.
-- `npm run docs:check`: Verify generated docs, status blocks, and markdown tables of contents are current.
+- `npm run docs:check`: Verify generated docs, status blocks, release metadata, and markdown tables of contents are current.
 
 ## Next
 
 - Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.
 - Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.
-- Add first-class framework components for inspectors, validation, and richer layout/styling primitives on top of the new form/focus layer.
+- Add first-class framework components for inspectors, validation, menus, and richer layout/styling primitives on top of the new form/focus layer.
 - Add a browser host that renders the same view tree from WASM-backed state.
+- Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes.

@@ -6,11 +6,24 @@
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
-      "progress": "./PROGRESS.md"
+      "progress": "./PROGRESS.md",
+      "layers": "./LAYERS.md"
     },
     "release": {
       "strategy": "semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.",
-      "tag_format": "zig-v${version}"
+      "tag_format": "zig-v${version}",
+      "commit_style": "Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).",
+      "scopes": [
+        "zig",
+        "zig/input",
+        "zig/runtime",
+        "zig/renderer",
+        "zig/ui",
+        "zig/components",
+        "zig/wasm",
+        "zig/automation",
+        "docs"
+      ]
     }
   },
   "milestones": [
@@ -60,6 +73,81 @@
       "details": "The core is WASM-ready, but a DOM/SVG/Canvas renderer has not been built yet."
     }
   ],
+  "layers": [
+    {
+      "name": "Runtime and Scheduling",
+      "status": "done",
+      "paths": [
+        "zig/src/tea.zig",
+        "zig/src/headless.zig",
+        "zig/src/terminal.zig"
+      ],
+      "shipped": "Interactive and headless runtimes share one message/update model with deterministic timers and explicit terminal lifecycle management.",
+      "next": "Fold platform event sources and richer host capabilities into the same runtime contract without borrowing Go’s goroutine-heavy shape."
+    },
+    {
+      "name": "Input Protocols",
+      "status": "in_progress",
+      "paths": [
+        "zig/src/input.zig",
+        "zig/src/tea.zig",
+        "zig/src/renderer.zig"
+      ],
+      "shipped": "The decoder now understands buffered UTF-8, CSI navigation, bracketed paste, focus reporting, and SGR mouse events.",
+      "next": "Add Kitty keyboard protocol, clipboard hooks, and layout-aware mouse routing so higher-level widgets stop guessing about host input."
+    },
+    {
+      "name": "View Tree and Layout",
+      "status": "done",
+      "paths": [
+        "zig/src/ui.zig"
+      ],
+      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, and semantic tones across terminal, headless, and future browser hosts.",
+      "next": "Expose layout metadata and measurable boxes so hit testing, scrolling regions, and cross-host renderers can share the same tree."
+    },
+    {
+      "name": "Renderer",
+      "status": "in_progress",
+      "paths": [
+        "zig/src/renderer.zig",
+        "zig/src/ui.zig"
+      ],
+      "shipped": "ANSI rendering is incremental at the line level and now enables the terminal modes needed for richer input.",
+      "next": "Replace line diffing with a cell buffer so short edits, cursor motion, and host-specific effects get cheaper and more precise."
+    },
+    {
+      "name": "Components and App Kit",
+      "status": "in_progress",
+      "paths": [
+        "zig/src/components",
+        "zig/src/focus.zig",
+        "zig/src/apps/showcase.zig"
+      ],
+      "shipped": "The rewrite has a native component surface for badges, spinners, lists, progress bars, text inputs, tables, forms, and shared focus handling.",
+      "next": "Add inspectors, validation, menus, richer tables, and layout-aware interaction primitives that feel like a real framework instead of a demo set."
+    },
+    {
+      "name": "WASM and Browser Host",
+      "status": "planned",
+      "paths": [
+        "zig/src/wasm_showcase.zig"
+      ],
+      "shipped": "The core can already compile to WASM and drive a headless text renderer from browser-controlled resize, key, and timer calls.",
+      "next": "Build a DOM/SVG/Canvas host that consumes the same model tree and gradually replaces text-only rendering on the web side."
+    },
+    {
+      "name": "Release and Repo Automation",
+      "status": "in_progress",
+      "paths": [
+        "scripts/update-docs.mjs",
+        "release.config.cjs",
+        "package.json",
+        ".github/workflows/semantic-release.yml"
+      ],
+      "shipped": "Semantic-release already owns zig-v* tagging, changelog updates, and docs-sync on main.",
+      "next": "Keep layer status, latest release line, and recent Zig-native commit intent visible so every gradual push has an obvious place in the roadmap."
+    }
+  ],
   "verification": [
     {
       "command": "cd zig && zig build",
@@ -79,13 +167,14 @@
     },
     {
       "command": "npm run docs:check",
-      "purpose": "Verify generated docs, status blocks, and markdown tables of contents are current."
+      "purpose": "Verify generated docs, status blocks, release metadata, and markdown tables of contents are current."
     }
   ],
   "next": [
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
     "Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.",
-    "Add first-class framework components for inspectors, validation, and richer layout/styling primitives on top of the new form/focus layer.",
-    "Add a browser host that renders the same view tree from WASM-backed state."
+    "Add first-class framework components for inspectors, validation, menus, and richer layout/styling primitives on top of the new form/focus layer.",
+    "Add a browser host that renders the same view tree from WASM-backed state.",
+    "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]
 }

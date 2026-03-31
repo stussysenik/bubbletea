@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -8,11 +9,15 @@ const root = process.cwd();
 const checkOnly = process.argv.includes("--check");
 const manifestPath = path.join(root, "automation", "progress.json");
 const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+const gitMeta = collectGitMeta(root);
 
 let changed = false;
 
 const progressPath = path.join(root, "PROGRESS.md");
-await writeFile(progressPath, replaceToc(renderProgress(manifest)));
+await writeFile(progressPath, replaceToc(renderProgress(manifest, gitMeta)));
+
+const layersPath = path.join(root, "LAYERS.md");
+await writeFile(layersPath, replaceToc(renderLayers(manifest, gitMeta)));
 
 const readmePath = path.join(root, "README.md");
 const readmeCurrent = await fs.readFile(readmePath, "utf8");
@@ -20,7 +25,7 @@ const readmeWithStatus = replaceSection(
   readmeCurrent,
   "<!-- zig-rewrite:start -->",
   "<!-- zig-rewrite:end -->",
-  buildStatusBlock(manifest),
+  buildStatusBlock(manifest, gitMeta),
 );
 await writeFile(readmePath, replaceToc(readmeWithStatus));
 
@@ -48,7 +53,7 @@ async function writeFile(file, next) {
   }
 }
 
-function renderProgress(data) {
+function renderProgress(data, git) {
   const { project, milestones, verification, next } = data;
   const generatedAt = new Date().toISOString().slice(0, 10);
 
@@ -62,10 +67,7 @@ function renderProgress(data) {
   ].join("\n");
 
   const verificationList = verification
-    .map(
-      (item) =>
-        `- \`${item.command}\`: ${item.purpose}`,
-    )
+    .map((item) => `- \`${item.command}\`: ${item.purpose}`)
     .join("\n");
 
   const nextList = next.map((item) => `- ${item}`).join("\n");
@@ -83,8 +85,11 @@ Generated from \`automation/progress.json\` on ${generatedAt}.
 ${project.summary}
 
 - Status: \`${project.status}\`
-- Docs: [README](${project.docs.readme}), [zig/README](${project.docs.zig_readme}), [PROGRESS](${project.docs.progress})
+- Docs: [README](${project.docs.readme}), [zig/README](${project.docs.zig_readme}), [PROGRESS](${project.docs.progress}), [LAYERS](${project.docs.layers})
 - Release Strategy: ${project.release.strategy}
+- Latest Zig Tag: \`${git.latestTag}\`
+- Latest Zig Commit: \`${git.latestZigCommit.hash}\` ${git.latestZigCommit.subject}
+- Commit Style: ${project.release.commit_style}
 
 ## Status Board
 
@@ -100,15 +105,72 @@ ${nextList}
 `;
 }
 
-function buildStatusBlock(data) {
+function renderLayers(data, git) {
+  const { project, layers, next } = data;
+  const generatedAt = new Date().toISOString().slice(0, 10);
+
+  const layerBoard = [
+    "| Layer | Status | Paths | Shipped | Next |",
+    "| --- | --- | --- | --- | --- |",
+    ...layers.map(
+      (layer) =>
+        `| ${escapePipes(layer.name)} | ${statusLabel(layer.status)} | ${escapePipes(layer.paths.join("<br>"))} | ${escapePipes(layer.shipped)} | ${escapePipes(layer.next)} |`,
+    ),
+  ].join("\n");
+
+  const recentCommits = git.recentZigCommits.length
+    ? git.recentZigCommits
+        .map((commit) => `- \`${commit.hash}\` ${commit.subject}`)
+        .join("\n")
+    : "- No Zig-native conventional commits found yet.";
+
+  const scopes = project.release.scopes.map((scope) => `- \`${scope}\``).join("\n");
+  const nextList = next.map((item) => `- ${item}`).join("\n");
+
+  return `# Layers
+
+Generated from \`automation/progress.json\` and local git state on ${generatedAt}.
+
+## Contents
+<!-- toc:start -->
+<!-- toc:end -->
+
+## Release Line
+
+- Latest Zig Tag: \`${git.latestTag}\`
+- Latest Zig Commit: \`${git.latestZigCommit.hash}\` ${git.latestZigCommit.subject}
+- Tag Format: \`${project.release.tag_format}\`
+- Commit Style: ${project.release.commit_style}
+
+## Layer Map
+
+${layerBoard}
+
+## Recent Zig Commits
+
+${recentCommits}
+
+## Commit Scopes
+
+${scopes}
+
+## Immediate Order
+
+${nextList}
+`;
+}
+
+function buildStatusBlock(data, git) {
   const counts = countStatuses(data.milestones);
   const verifyCommands = data.verification.slice(0, 3).map((item) => `\`${item.command}\``).join(", ");
   return `- Status: \`${data.project.status}\`
 - Rewrite Summary: ${data.project.summary}
 - Progress Board: ${counts.done} done, ${counts.in_progress} in progress, ${counts.planned} planned
-- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md)
+- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md)
+- Latest Zig Tag: \`${git.latestTag}\`
 - Default Verification: ${verifyCommands}
-- Release Flow: ${data.project.release.strategy}`;
+- Release Flow: ${data.project.release.strategy}
+- Commit Discipline: ${data.project.release.commit_style}`;
 }
 
 function replaceToc(content) {
@@ -221,4 +283,45 @@ function statusLabel(status) {
 
 function escapePipes(value) {
   return String(value).replace(/\|/g, "\\|");
+}
+
+function collectGitMeta(cwd) {
+  const latestTag =
+    git(cwd, ["tag", "--list", "zig-v*", "--sort=-version:refname"]).split(/\r?\n/).filter(Boolean)[0] ??
+    "unreleased";
+  const recentZigCommits = git(cwd, [
+    "log",
+    "--max-count=5",
+    "--pretty=format:%h%x09%s",
+    "--perl-regexp",
+    "--grep=^(feat|fix|refactor|docs|chore)\\(zig(?:/[^)]*)?\\):",
+  ])
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const [hash, subject] = line.split("\t");
+      return { hash, subject };
+    });
+  const latestZigCommit = recentZigCommits[0] ?? {
+    hash: "unknown",
+    subject: "No Zig-native conventional commit found",
+  };
+
+  return {
+    latestTag,
+    latestZigCommit,
+    recentZigCommits,
+  };
+}
+
+function git(cwd, args) {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  }
 }

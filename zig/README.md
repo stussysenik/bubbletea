@@ -9,6 +9,7 @@ This directory contains a Zig-first Bubble Tea rewrite prototype instead of a li
 - [Optimization targets worth pushing further](#optimization-targets-worth-pushing-further)
 - [Stack recommendation](#stack-recommendation)
 - [Automation](#automation)
+- [Layer Roadmap](#layer-roadmap)
 - [Run](#run)
 - [Build WASM](#build-wasm)
 - [Test](#test)
@@ -70,11 +71,17 @@ Practical recommendation:
 
 ## Automation
 
-- `npm run docs:sync` refreshes `README.md`, `PROGRESS.md`, and markdown tables of contents.
+- `npm run docs:sync` refreshes `README.md`, `PROGRESS.md`, `LAYERS.md`, and markdown tables of contents.
 - `npm run docs:check` verifies generated docs are current.
+- `npm run release:status` prints the latest `zig-v*` tag, current Zig head commit, and recent Zig-native commit subjects.
 - `npm run release:dry-run` previews semantic-release decisions locally.
 - `npm run release` is intended for CI on `main`; it creates `zig-v*` tags and updates the changelog/docs without colliding with upstream Bubble Tea release tags.
 - Seed the release namespace with `zig-v0.0.0` at the pre-rewrite upstream main tip so semantic-release only analyzes Zig-native commits afterward.
+
+## Layer Roadmap
+
+- [LAYERS.md](../LAYERS.md) tracks the rewrite by architecture layer instead of by random file churn.
+- Prefer gradual, scoped commits such as `feat(zig/input): ...`, `feat(zig/renderer): ...`, or `docs(zig): ...` so release tags map cleanly to rewrite milestones.
 
 ## Run
 

@@ -17,6 +17,7 @@ module.exports = {
           "CHANGELOG.md",
           "README.md",
           "PROGRESS.md",
+          "LAYERS.md",
           "zig/README.md",
           "automation/progress.json",
           "package.json",
