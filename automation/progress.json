@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -66,12 +66,12 @@
     {
       "name": "Higher-level app kit",
       "status": "in_progress",
-      "details": "Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, and wheel navigation landed; richer command routing and interaction primitives are the next framework layer."
+      "details": "Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, wheel navigation, and browser-targetable form fields landed; richer command routing and interaction primitives are the next framework layer."
     },
     {
       "name": "Browser renderer",
       "status": "in_progress",
-      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions directly while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
+      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions plus direct form-field focus while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
     }
   ],
   "layers": [
@@ -127,8 +127,8 @@
         "zig/src/focus.zig",
         "zig/src/apps/showcase.zig"
       ],
-      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, shared focus handling, and browser-targetable list/menu actions.",
-      "next": "Add richer tables, command routing, and layout-aware interaction primitives such as field-level browser targeting so this feels like a real framework instead of a demo set."
+      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, shared focus handling, and browser-targetable list/menu/form-field actions.",
+      "next": "Add richer tables, command routing, and layout-aware interaction primitives such as cursor placement and terminal hit routing so this feels like a real framework instead of a demo set."
     },
     {
       "name": "WASM and Browser Host",
@@ -140,8 +140,8 @@
         "zig/build.zig",
         "zig/web"
       ],
-      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes, can focus interactive showcase regions directly from browser hit testing, and can invoke tagged list/menu actions while keeping the raw text frame for debugging.",
-      "next": "Push region-aware hit testing deeper into field-level interactions and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
+      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes, can focus interactive showcase regions directly from browser hit testing, and can invoke tagged list/menu actions plus direct form-field focus while keeping the raw text frame for debugging.",
+      "next": "Push region-aware hit testing deeper into cursor placement and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
     },
     {
       "name": "Release and Repo Automation",
@@ -190,7 +190,7 @@
     "Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.",
     "Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
-    "Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.",
+    "Push region-aware hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]
 }

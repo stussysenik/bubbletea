@@ -23,6 +23,7 @@ const REGION_CODES = Object.freeze({
 const ACTION_CODES = Object.freeze({
   list_item: 1,
   menu_item: 2,
+  form_field: 3,
 });
 
 const POINTER_BUTTONS = Object.freeze({

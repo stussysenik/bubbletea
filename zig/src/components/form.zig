@@ -38,6 +38,12 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             active: bool = true,
         };
 
+        /// Optional composition metadata for hosts that want direct field
+        /// targeting instead of replaying keyboard focus moves.
+        pub const ComposeOptions = struct {
+            field_action_kind: ?[]const u8 = null,
+        };
+
         /// Creates a form from caller-provided field definitions.
         pub fn init(specs: [field_count]FieldSpec, options: Options) Self {
             var inputs: [field_count]Input = undefined;
@@ -172,6 +178,12 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
 
         /// Composes the form into labeled field panels and optional help text.
         pub fn compose(self: *const Self, tree: *ui.Tree) !ui.NodeId {
+            return self.composeWithOptions(tree, .{});
+        }
+
+        /// Composes the form and optionally tags each field for direct host
+        /// actions such as browser-side field focusing.
+        pub fn composeWithOptions(self: *const Self, tree: *ui.Tree, options: ComposeOptions) !ui.NodeId {
             if (field_count == 0) {
                 const empty = try tree.textStyled("(empty form)", .{ .tone = .muted });
                 return if (self.title) |title|
@@ -199,6 +211,13 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
                     try self.inputs[index].compose(tree),
                     .{
                         .title = spec.label,
+                        .action = if (options.field_action_kind) |action_kind|
+                            .{
+                                .kind = action_kind,
+                                .value = index,
+                            }
+                        else
+                            null,
                         .padding = ui.Insets.symmetric(0, 1),
                         .tone = if (validation != null) .warning else if (focused) spec.tone else .muted,
                     },
@@ -289,6 +308,25 @@ test "form compose includes labels and help text" {
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "Draft App") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "Name") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "tab moves between fields") != null);
+}
+
+test "form can compose browser action metadata per field" {
+    const DemoForm = Form(2, 32);
+    const form = DemoForm.init(.{
+        .{ .id = "name", .label = "Name" },
+        .{ .id = "cmd", .label = "Command" },
+    }, .{});
+
+    var tree = ui.Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const root = try form.composeWithOptions(&tree, .{ .field_action_kind = "form_field" });
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try tree.writeJson(buffer.writer(std.testing.allocator), root);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"form_field\",\"value\":0}") != null);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"form_field\",\"value\":1}") != null);
 }
 
 test "form pastes into the focused field" {

@@ -61,6 +61,7 @@ pub const BrowserRegion = enum(u8) {
 pub const BrowserAction = enum(u8) {
     list_item = 1,
     menu_item = 2,
+    form_field = 3,
 };
 
 const scaffold_items = [_]ScaffoldMenu.Item{
@@ -317,7 +318,7 @@ pub fn App(comptime Msg: type) type {
             );
 
             const draft_panel = try tree.box(
-                try self.draft.compose(tree),
+                try self.draft.composeWithOptions(tree, .{ .field_action_kind = formFieldActionName() }),
                 .{
                     .title = if (self.focus.isFocused(zone_form)) "Draft App (focused)" else "Draft App",
                     .region = formRegionName(),
@@ -444,6 +445,7 @@ pub fn App(comptime Msg: type) type {
             return switch (action) {
                 .list_item => self.selectVisibleRow(value),
                 .menu_item => self.activatePresetFromBrowser(value),
+                .form_field => self.focusFormFieldFromBrowser(value),
             };
         }
 
@@ -459,6 +461,14 @@ pub fn App(comptime Msg: type) type {
         fn activatePresetFromBrowser(self: *Self, index: usize) bool {
             if (!self.scaffold_menu.setSelected(index)) return false;
             self.applySelectedPreset();
+            _ = self.focus.focus(zone_form);
+            self.syncFocus();
+            return true;
+        }
+
+        // Focuses one draft field directly from a host hit target.
+        fn focusFormFieldFromBrowser(self: *Self, index: usize) bool {
+            if (!self.draft.setFocusedIndex(index)) return false;
             _ = self.focus.focus(zone_form);
             self.syncFocus();
             return true;
@@ -489,6 +499,11 @@ fn listActionName() []const u8 {
 // Stable browser-facing action label for scaffold menu items.
 fn menuActionName() []const u8 {
     return @tagName(BrowserAction.menu_item);
+}
+
+// Stable browser-facing action label for draft form field boxes.
+fn formFieldActionName() []const u8 {
+    return @tagName(BrowserAction.form_field);
 }
 
 // Stable browser-facing region label for the form panel.
@@ -751,6 +766,20 @@ test "showcase browser actions can activate scaffold presets" {
     try std.testing.expectEqualStrings("bubbletea-zig-unified", program.model.draft.valueById("name").?);
     try std.testing.expectEqualStrings("zig build run && zig build wasm", program.model.draft.valueById("command").?);
     try std.testing.expectEqualStrings("cli + wasm", program.model.draft.valueById("target").?);
+}
+
+test "showcase browser actions can focus individual form fields" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.triggerBrowserAction(.form_field, 1));
+    try std.testing.expect(program.model.focus.isFocused(zone_form));
+    try std.testing.expect(program.model.draft.focus.isFocused(1));
+    try std.testing.expect(program.model.draft.active);
 }
 
 test "showcase menu applies scaffold presets" {

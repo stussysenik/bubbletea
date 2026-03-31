@@ -295,6 +295,7 @@ fn decodeAction(code: u8) ?showcase.BrowserAction {
     return switch (code) {
         @intFromEnum(showcase.BrowserAction.list_item) => .list_item,
         @intFromEnum(showcase.BrowserAction.menu_item) => .menu_item,
+        @intFromEnum(showcase.BrowserAction.form_field) => .form_field,
         else => null,
     };
 }
