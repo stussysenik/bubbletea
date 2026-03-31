@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer with wide-glyph handling, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -46,7 +46,7 @@
     {
       "name": "Reusable components",
       "status": "done",
-      "details": "Spinner, list, badge, inspector, menu, progress bar, text input, table, and form components now live in zig/src/components."
+      "details": "Spinner, list, badge, inspector, menu, progress bar, text input, table, and form components now live in zig/src/components, with text input now emitting a semantic cursor node instead of a literal caret glyph."
     },
     {
       "name": "Terminal styling",
@@ -71,7 +71,7 @@
     {
       "name": "Browser renderer",
       "status": "in_progress",
-      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions directly while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
+      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions directly while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
     }
   ],
   "layers": [
@@ -101,9 +101,10 @@
       "name": "View Tree and Layout",
       "status": "done",
       "paths": [
-        "zig/src/ui.zig"
+        "zig/src/ui.zig",
+        "zig/src/cell_width.zig"
       ],
-      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, and can tag interactive regions and item actions for browser hosts.",
+      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, semantic cursor nodes, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, tags interactive regions and item actions for browser hosts, and shares terminal-cell width logic for layout-sensitive text.",
       "next": "Push the same metadata deeper into field-level interactions and richer layout metadata so hit testing, scrolling regions, and cross-host renderers can share more than terminal-sized boxes."
     },
     {
@@ -111,10 +112,11 @@
       "status": "in_progress",
       "paths": [
         "zig/src/renderer.zig",
-        "zig/src/ui.zig"
+        "zig/src/ui.zig",
+        "zig/src/cell_width.zig"
       ],
-      "shipped": "ANSI rendering now parses the composed frame into styled cells, diffs per-glyph runs instead of whole lines, and still enables the terminal modes needed for richer input.",
-      "next": "Add wide-cell/grapheme awareness, cursor-state rendering, and host-specific effects on top of the new cell grid."
+      "shipped": "ANSI rendering now parses the composed frame into styled cells, diffs per-glyph runs instead of whole lines, keeps wide glyphs and combining sequences aligned to real terminal columns, and still enables the terminal modes needed for richer input.",
+      "next": "Add true grapheme-cluster edge cases, cursor-state rendering that can drive the real terminal cursor, and host-specific effects on top of the new cell grid."
     },
     {
       "name": "Components and App Kit",
@@ -133,10 +135,11 @@
       "paths": [
         "zig/src/wasm_showcase.zig",
         "zig/src/ui.zig",
+        "zig/src/cell_width.zig",
         "zig/build.zig",
         "zig/web"
       ],
-      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds, can focus interactive showcase regions directly from browser hit testing, and can invoke tagged list/menu actions while keeping the raw text frame for debugging.",
+      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes, can focus interactive showcase regions directly from browser hit testing, and can invoke tagged list/menu actions while keeping the raw text frame for debugging.",
       "next": "Push region-aware hit testing deeper into field-level interactions and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
     },
     {
@@ -184,7 +187,7 @@
   ],
   "next": [
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
-    "Add wide-cell/grapheme handling and cursor-aware effects on top of the new cell-buffer renderer.",
+    "Add true grapheme-cluster edge cases and real terminal-cursor state on top of the new wide-glyph-safe cell-buffer renderer.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
     "Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
