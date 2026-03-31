@@ -158,7 +158,7 @@ pub fn TextInput(comptime capacity: usize) type {
                     count += 1;
                 }
 
-                nodes[count] = try tree.textStyled("|", .{ .tone = self.tone });
+                nodes[count] = try tree.cursor(self.tone);
                 count += 1;
 
                 if (self.cursor < self.len) {

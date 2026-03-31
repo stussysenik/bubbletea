@@ -120,10 +120,8 @@ fn appendRepeated(allocator: std.mem.Allocator, buffer: *std.ArrayList(u8), byte
     @memset(slice, byte);
 }
 
-// Width is tracked in codepoints for now; cell-buffer rendering can tighten
-// this later.
 fn displayWidth(text: []const u8) usize {
-    return std.unicode.utf8CountCodepoints(text) catch text.len;
+    return ui.displayWidth(text);
 }
 
 test "table renders headers and selected row" {

@@ -441,6 +441,8 @@ function buildTreeNode(node, metrics) {
   switch (node.kind) {
     case "text":
       return buildTextNode(node, metrics);
+    case "cursor":
+      return buildCursorNode(node, metrics);
     case "row":
     case "column":
       return buildStackNode(node, metrics);
@@ -460,6 +462,16 @@ function buildTextNode(node, metrics) {
   element.className = `ui-node ui-text tone-${node.tone} align-${node.alignment}`;
   element.textContent = node.content;
   applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
+  return element;
+}
+
+function buildCursorNode(node, metrics) {
+  const element = document.createElement("div");
+  element.className = `ui-node ui-cursor tone-${node.tone}`;
+  applyNodeLayout(element, node.layout, metrics, {
+    exactWidth: true,
+    exactHeight: true,
+  });
   return element;
 }
 

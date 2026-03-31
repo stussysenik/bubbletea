@@ -1,4 +1,5 @@
 const std = @import("std");
+const cell_width = @import("cell_width.zig");
 
 /// Stable handle for nodes stored in the per-frame tree arena.
 pub const NodeId = u32;
@@ -92,6 +93,9 @@ pub const RenderOptions = struct {
     ansi: bool = true,
 };
 
+/// Shared display-width helper used by layout-sensitive components.
+pub const displayWidth = cell_width.displayWidth;
+
 const ChildRange = struct {
     start: usize,
     len: usize,
@@ -100,6 +104,10 @@ const ChildRange = struct {
 const TextNode = struct {
     content: []const u8,
     alignment: Align,
+    tone: Tone,
+};
+
+const CursorNode = struct {
     tone: Tone,
 };
 
@@ -139,6 +147,7 @@ const RuleNode = struct {
 
 const Node = union(enum) {
     text: TextNode,
+    cursor: CursorNode,
     stack: StackNode,
     box: BoxNode,
     spacer: SpacerNode,
@@ -209,6 +218,15 @@ pub const Tree = struct {
                 .content = content,
                 .alignment = options.alignment,
                 .tone = options.tone,
+            },
+        });
+    }
+
+    /// Creates a semantic cursor node instead of embedding a literal glyph.
+    pub fn cursor(self: *Tree, tone: Tone) !NodeId {
+        return self.appendNode(.{
+            .cursor = .{
+                .tone = tone,
             },
         });
     }
@@ -405,6 +423,13 @@ fn writeNodeJsonAt(tree: *const Tree, writer: anytype, node_id: NodeId, origin: 
             try writeJsonEnumTag(writer, text_node.alignment);
             try writer.writeByte('}');
         },
+        .cursor => |cursor_node| {
+            try writer.writeAll("{\"kind\":\"cursor\",\"layout\":");
+            try writeLayoutJson(writer, makeFrame(origin, size));
+            try writer.writeAll(",\"tone\":");
+            try writeJsonEnumTag(writer, cursor_node.tone);
+            try writer.writeByte('}');
+        },
         .stack => |stack_node| {
             try writer.writeAll("{\"kind\":");
             try writeJsonString(writer, if (stack_node.axis == .horizontal) "row" else "column");
@@ -577,6 +602,7 @@ fn makeFrame(origin: LayoutOrigin, size: LayoutSize) LayoutFrame {
 fn measureNode(tree: *const Tree, node_id: NodeId) LayoutSize {
     return switch (tree.nodes.items[node_id]) {
         .text => |text_node| measureTextContent(text_node.content),
+        .cursor => .{ .width = 1, .height = 1 },
         .stack => |stack_node| measureStack(tree, stack_node),
         .box => |box_node| measureBox(box_node, measureNode(tree, box_node.child)),
         .spacer => |spacer_node| .{
@@ -820,6 +846,7 @@ fn renderNode(tree: *Tree, node_id: NodeId, ctx: RenderContext) std.mem.Allocato
     const allocator = tree.allocator();
     return switch (tree.nodes.items[node_id]) {
         .text => |text_node| try renderText(allocator, text_node, ctx),
+        .cursor => |cursor_node| try renderCursor(allocator, cursor_node, ctx),
         .stack => |stack_node| try renderStack(tree, stack_node, ctx),
         .box => |box_node| try renderBox(tree, box_node, ctx),
         .spacer => |spacer_node| try renderSpacer(allocator, spacer_node),
@@ -841,6 +868,23 @@ fn renderText(allocator: std.mem.Allocator, text_node: TextNode, ctx: RenderCont
         _ = try block.appendEmptyLine();
     }
 
+    return block;
+}
+
+// Cursor nodes render semantically: plain hosts get `|`, terminal hosts get a
+// solid block so the caret is not mistaken for model text.
+fn renderCursor(allocator: std.mem.Allocator, cursor_node: CursorNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
+    var block = Block.init(allocator);
+    var line = Line{};
+
+    if (ctx.ansi) {
+        try line.appendStyledSliceWithMode(allocator, "█", cursor_node.tone, true);
+    } else {
+        try line.appendStyledSliceWithMode(allocator, "|", cursor_node.tone, false);
+    }
+
+    block.width = 1;
+    try block.lines.append(allocator, line);
     return block;
 }
 
@@ -1067,11 +1111,6 @@ fn appendAlignedLine(
     try target.appendRepeat(allocator, ' ', left_padding);
     try target.appendLine(allocator, line);
     try target.appendRepeat(allocator, ' ', right_padding);
-}
-
-// Codepoint count is the current display-width approximation.
-fn displayWidth(text: []const u8) usize {
-    return std.unicode.utf8CountCodepoints(text) catch text.len;
 }
 
 // Reset sequence appended after styled spans.

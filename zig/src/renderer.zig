@@ -1,4 +1,5 @@
 const std = @import("std");
+const cell_width = @import("cell_width.zig");
 
 /// Runtime knobs for the terminal renderer.
 pub const Options = struct {
@@ -154,10 +155,22 @@ const CellStyle = enum(u8) {
     warning,
 };
 
-// One visible cell in the flattened terminal grid.
+const CellKind = enum(u8) {
+    glyph,
+    continuation,
+};
+
+const GlyphRange = struct {
+    start: usize = 0,
+    len: usize = 0,
+};
+
+// One visible terminal cell in the flattened grid.
 const Cell = struct {
-    codepoint: u21 = ' ',
+    kind: CellKind = .glyph,
+    glyph: GlyphRange = .{},
     style: CellStyle = .normal,
+    blank: bool = true,
 };
 
 // Row slice inside the flat cell storage.
@@ -170,15 +183,18 @@ const RowRange = struct {
 const CellBuffer = struct {
     rows: std.ArrayList(RowRange) = .empty,
     cells: std.ArrayList(Cell) = .empty,
+    glyph_bytes: std.ArrayList(u8) = .empty,
 
     fn deinit(self: *CellBuffer, allocator: std.mem.Allocator) void {
         self.rows.deinit(allocator);
         self.cells.deinit(allocator);
+        self.glyph_bytes.deinit(allocator);
     }
 
     fn clearRetainingCapacity(self: *CellBuffer) void {
         self.rows.clearRetainingCapacity();
         self.cells.clearRetainingCapacity();
+        self.glyph_bytes.clearRetainingCapacity();
     }
 
     // Parses a rendered frame into styled cells, skipping ANSI SGR sequences
@@ -190,10 +206,12 @@ const CellBuffer = struct {
         var row_len: usize = 0;
         var style: CellStyle = .normal;
         var index: usize = 0;
+        var pending: PendingCluster = .{};
 
         while (index < frame.len) {
             switch (frame[index]) {
                 '\n' => {
+                    try self.flushPendingCluster(allocator, &pending, &row_len);
                     try self.rows.append(allocator, .{
                         .start = row_start,
                         .len = row_len,
@@ -204,23 +222,59 @@ const CellBuffer = struct {
                 },
                 '\r' => index += 1,
                 0x1b => {
+                    try self.flushPendingCluster(allocator, &pending, &row_len);
                     if (consumeAnsi(frame, &index, &style)) continue;
                     index += 1;
                 },
                 else => {
                     const sequence_len = std.unicode.utf8ByteSequenceLength(frame[index]) catch 1;
                     const end = @min(frame.len, index + sequence_len);
-                    const codepoint = std.unicode.utf8Decode(frame[index..end]) catch @as(u21, '?');
-                    try self.cells.append(allocator, .{
-                        .codepoint = codepoint,
+                    const bytes = frame[index..end];
+                    const codepoint = std.unicode.utf8Decode(bytes) catch @as(u21, '?');
+                    const width = cell_width.scalarWidth(codepoint);
+                    const extends_cluster = pending.active and (width == 0 or pending.join_pending);
+
+                    if (extends_cluster) {
+                        if (!pending.blank or codepoint != ' ') {
+                            if (pending.blank and codepoint != ' ') {
+                                pending.blank = false;
+                                pending.start = self.glyph_bytes.items.len;
+                            }
+                            if (codepoint != ' ') {
+                                try self.glyph_bytes.appendSlice(allocator, bytes);
+                                pending.len += bytes.len;
+                            }
+                        }
+                        pending.width = @max(pending.width, width);
+                        pending.join_pending = codepoint == 0x200D;
+                        index = end;
+                        continue;
+                    }
+
+                    try self.flushPendingCluster(allocator, &pending, &row_len);
+                    if (width == 0) {
+                        index = end;
+                        continue;
+                    }
+
+                    pending = .{
+                        .active = true,
                         .style = style,
-                    });
-                    row_len += 1;
+                        .width = width,
+                        .blank = codepoint == ' ',
+                        .join_pending = codepoint == 0x200D,
+                    };
+                    if (codepoint != ' ') {
+                        pending.start = self.glyph_bytes.items.len;
+                        try self.glyph_bytes.appendSlice(allocator, bytes);
+                        pending.len = bytes.len;
+                    }
                     index = end;
                 },
             }
         }
 
+        try self.flushPendingCluster(allocator, &pending, &row_len);
         try self.rows.append(allocator, .{
             .start = row_start,
             .len = row_len,
@@ -236,7 +290,7 @@ const CellBuffer = struct {
         }
 
         for (self.cells.items, other.cells.items) |left, right| {
-            if (left.codepoint != right.codepoint or left.style != right.style) return false;
+            if (!cellsEqual(self, left, other, right)) return false;
         }
 
         return true;
@@ -254,6 +308,49 @@ const CellBuffer = struct {
         if (col_index >= row.len) return .{};
         return self.cells.items[row.start + col_index];
     }
+
+    fn glyphSlice(self: *const CellBuffer, cell: Cell) []const u8 {
+        return self.glyph_bytes.items[cell.glyph.start..][0..cell.glyph.len];
+    }
+
+    fn flushPendingCluster(
+        self: *CellBuffer,
+        allocator: std.mem.Allocator,
+        pending: *PendingCluster,
+        row_len: *usize,
+    ) !void {
+        if (!pending.active) return;
+
+        try self.cells.append(allocator, .{
+            .kind = .glyph,
+            .glyph = .{
+                .start = pending.start,
+                .len = pending.len,
+            },
+            .style = pending.style,
+            .blank = pending.blank,
+        });
+        if (pending.width == 2) {
+            try self.cells.append(allocator, .{
+                .kind = .continuation,
+                .style = pending.style,
+                .blank = false,
+            });
+        }
+
+        row_len.* += pending.width;
+        pending.* = .{};
+    }
+};
+
+const PendingCluster = struct {
+    active: bool = false,
+    start: usize = 0,
+    len: usize = 0,
+    width: usize = 0,
+    style: CellStyle = .normal,
+    blank: bool = true,
+    join_pending: bool = false,
 };
 
 // Parses one ANSI CSI sequence and updates the current cell style when the
@@ -317,24 +414,25 @@ fn writeCellDiff(
         var col_index: usize = 0;
 
         while (col_index < row_width) {
-            if (cellsEqual(previous.cellAt(row_index, col_index), next.cellAt(row_index, col_index))) {
+            if (cellsEqual(previous, previous.cellAt(row_index, col_index), next, next.cellAt(row_index, col_index))) {
                 col_index += 1;
                 continue;
             }
 
             const run_start = col_index;
-            while (col_index < row_width and !cellsEqual(previous.cellAt(row_index, col_index), next.cellAt(row_index, col_index))) {
+            while (col_index < row_width and !cellsEqual(previous, previous.cellAt(row_index, col_index), next, next.cellAt(row_index, col_index))) {
                 col_index += 1;
             }
 
             try appendCursorMove(output.writer(allocator), row_index + 1, run_start + 1);
             for (run_start..col_index) |run_col| {
                 const cell = next.cellAt(row_index, run_col);
+                if (cell.kind == .continuation) continue;
                 if (cell.style != active_style) {
                     try output.appendSlice(allocator, stylePrefix(cell.style));
                     active_style = cell.style;
                 }
-                try appendCodepoint(output, allocator, cell.codepoint);
+                try appendCellGlyph(output, allocator, next, cell);
             }
         }
     }
@@ -345,8 +443,10 @@ fn writeCellDiff(
 }
 
 // Exact cell equality used to identify cursor runs that need repainting.
-fn cellsEqual(left: Cell, right: Cell) bool {
-    return left.codepoint == right.codepoint and left.style == right.style;
+fn cellsEqual(left_buffer: *const CellBuffer, left: Cell, right_buffer: *const CellBuffer, right: Cell) bool {
+    if (left.kind != right.kind or left.style != right.style or left.blank != right.blank) return false;
+    if (left.kind == .continuation or left.blank) return true;
+    return std.mem.eql(u8, left_buffer.glyphSlice(left), right_buffer.glyphSlice(right));
 }
 
 // Emits a 1-based terminal cursor move.
@@ -354,11 +454,13 @@ fn appendCursorMove(writer: anytype, row: usize, col: usize) !void {
     try std.fmt.format(writer, "\x1b[{d};{d}H", .{ row, col });
 }
 
-// Emits one UTF-8 codepoint into the diff stream.
-fn appendCodepoint(output: *std.ArrayList(u8), allocator: std.mem.Allocator, codepoint: u21) !void {
-    var buffer: [4]u8 = undefined;
-    const len = std.unicode.utf8Encode(codepoint, &buffer) catch unreachable;
-    try output.appendSlice(allocator, buffer[0..len]);
+// Emits the visible glyph for one cell into the diff stream.
+fn appendCellGlyph(output: *std.ArrayList(u8), allocator: std.mem.Allocator, buffer: *const CellBuffer, cell: Cell) !void {
+    if (cell.blank) {
+        try output.append(allocator, ' ');
+        return;
+    }
+    try output.appendSlice(allocator, buffer.glyphSlice(cell));
 }
 
 // ANSI prefix used for the given semantic style.
@@ -379,11 +481,22 @@ test "cell buffer parses styled frames" {
     try buffer.parse(std.testing.allocator, "a\x1b[1;96mb\x1b[0m\n");
     try std.testing.expectEqual(@as(usize, 2), buffer.rows.items.len);
     try std.testing.expectEqual(@as(usize, 2), buffer.rowWidth(0));
-    try std.testing.expectEqual(@as(u21, 'a'), buffer.cellAt(0, 0).codepoint);
+    try std.testing.expectEqualStrings("a", buffer.glyphSlice(buffer.cellAt(0, 0)));
     try std.testing.expectEqual(CellStyle.normal, buffer.cellAt(0, 0).style);
-    try std.testing.expectEqual(@as(u21, 'b'), buffer.cellAt(0, 1).codepoint);
+    try std.testing.expectEqualStrings("b", buffer.glyphSlice(buffer.cellAt(0, 1)));
     try std.testing.expectEqual(CellStyle.accent, buffer.cellAt(0, 1).style);
     try std.testing.expectEqual(@as(usize, 0), buffer.rowWidth(1));
+}
+
+test "cell buffer tracks wide and combining glyphs by terminal width" {
+    var buffer = CellBuffer{};
+    defer buffer.deinit(std.testing.allocator);
+
+    try buffer.parse(std.testing.allocator, "e\u{0301}漢");
+    try std.testing.expectEqual(@as(usize, 3), buffer.rowWidth(0));
+    try std.testing.expectEqualStrings("e\u{0301}", buffer.glyphSlice(buffer.cellAt(0, 0)));
+    try std.testing.expectEqualStrings("漢", buffer.glyphSlice(buffer.cellAt(0, 1)));
+    try std.testing.expectEqual(CellKind.continuation, buffer.cellAt(0, 2).kind);
 }
 
 test "cell diff rewrites only changed glyphs" {
@@ -432,4 +545,20 @@ test "cell diff preserves semantic ANSI styles" {
 
     try writeCellDiff(&output, std.testing.allocator, &previous, &next);
     try std.testing.expect(std.mem.indexOf(u8, output.items, "\x1b[1;96mA\x1b[0m") != null);
+}
+
+test "cell diff preserves wide glyph clusters" {
+    var previous = CellBuffer{};
+    defer previous.deinit(std.testing.allocator);
+    try previous.parse(std.testing.allocator, "ab");
+
+    var next = CellBuffer{};
+    defer next.deinit(std.testing.allocator);
+    try next.parse(std.testing.allocator, "a漢");
+
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try writeCellDiff(&output, std.testing.allocator, &previous, &next);
+    try std.testing.expectEqualStrings("\x1b[1;2H漢", output.items);
 }
