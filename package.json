@@ -7,6 +7,10 @@
     "docs:check": "node scripts/update-docs.mjs --check",
     "web:check": "node --check zig/web/app.js",
     "web:serve": "python3 -m http.server --directory zig/zig-out/web/showcase 4173",
+    "openspec:status": "npx -y @fission-ai/openspec@latest status --change rewrite-bubbletea-in-zig",
+    "openspec:validate": "npx -y @fission-ai/openspec@latest validate rewrite-bubbletea-in-zig --type change --strict --no-interactive",
+    "ralph:loop": "bash scripts/ralph-loop.sh rewrite-bubbletea-in-zig",
+    "ralph:watch": "WATCH_MODE=1 bash scripts/ralph-loop.sh rewrite-bubbletea-in-zig --watch",
     "release:status": "node scripts/release-status.mjs",
     "release": "semantic-release",
     "release:dry-run": "semantic-release --dry-run --no-ci"

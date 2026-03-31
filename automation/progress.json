@@ -2,12 +2,15 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The remaining rewrite phases are now also captured in OpenSpec.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
       "progress": "./PROGRESS.md",
-      "layers": "./LAYERS.md"
+      "layers": "./LAYERS.md",
+      "openspec_readme": "./openspec/README.md",
+      "openspec_project": "./openspec/project.md",
+      "openspec_change": "./openspec/changes/rewrite-bubbletea-in-zig"
     },
     "release": {
       "strategy": "semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.",

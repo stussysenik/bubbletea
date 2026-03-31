@@ -33,10 +33,11 @@ To get started, see the tutorial below, the [examples][examples], the
 
 <!-- zig-rewrite:start -->
 - Status: `active`
-- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime.
+- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The remaining rewrite phases are now also captured in OpenSpec.
 - Progress Board: 6 done, 3 in progress, 0 planned
-- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md)
-- Latest Zig Tag: `zig-v0.13.0`
+- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md), [openspec/README.md](./openspec/README.md)
+- Planning: [openspec/project.md](./openspec/project.md), [openspec/changes/rewrite-bubbletea-in-zig](./openspec/changes/rewrite-bubbletea-in-zig)
+- Latest Zig Tag: `zig-v0.14.0`
 - Default Verification: `cd zig && zig build`, `cd zig && zig build test`, `cd zig && zig build wasm`
 - Release Flow: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
 - Commit Discipline: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).

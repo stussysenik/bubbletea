@@ -85,7 +85,8 @@ Generated from \`automation/progress.json\` on ${generatedAt}.
 ${project.summary}
 
 - Status: \`${project.status}\`
-- Docs: [README](${project.docs.readme}), [zig/README](${project.docs.zig_readme}), [PROGRESS](${project.docs.progress}), [LAYERS](${project.docs.layers})
+- Docs: [README](${project.docs.readme}), [zig/README](${project.docs.zig_readme}), [PROGRESS](${project.docs.progress}), [LAYERS](${project.docs.layers}), [OpenSpec](${project.docs.openspec_readme})
+- Planning: [project](${project.docs.openspec_project}), [active change](${project.docs.openspec_change})
 - Release Strategy: ${project.release.strategy}
 - Latest Zig Tag: \`${git.latestTag}\`
 - Commit Style: ${project.release.commit_style}
@@ -155,7 +156,8 @@ function buildStatusBlock(data, git) {
   return `- Status: \`${data.project.status}\`
 - Rewrite Summary: ${data.project.summary}
 - Progress Board: ${counts.done} done, ${counts.in_progress} in progress, ${counts.planned} planned
-- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md)
+- Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md), [openspec/README.md](./openspec/README.md)
+- Planning: [openspec/project.md](./openspec/project.md), [openspec/changes/rewrite-bubbletea-in-zig](./openspec/changes/rewrite-bubbletea-in-zig)
 - Latest Zig Tag: \`${git.latestTag}\`
 - Default Verification: ${verifyCommands}
 - Release Flow: ${data.project.release.strategy}
