@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds and region-aware focus targeting from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, form-driven UI primitives, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -71,7 +71,7 @@
     {
       "name": "Browser renderer",
       "status": "in_progress",
-      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, and can focus interactive showcase regions from browser hit testing while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
+      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions directly while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
     }
   ],
   "layers": [
@@ -103,8 +103,8 @@
       "paths": [
         "zig/src/ui.zig"
       ],
-      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, and semantic tones across terminal, headless, and browser hosts, and now exposes measured layout bounds inside structured snapshots.",
-      "next": "Add named interactive regions and richer layout metadata so hit testing, scrolling regions, and cross-host renderers can share more than terminal-sized boxes."
+      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, and can tag interactive regions and item actions for browser hosts.",
+      "next": "Push the same metadata deeper into field-level interactions and richer layout metadata so hit testing, scrolling regions, and cross-host renderers can share more than terminal-sized boxes."
     },
     {
       "name": "Renderer",
@@ -124,8 +124,8 @@
         "zig/src/focus.zig",
         "zig/src/apps/showcase.zig"
       ],
-      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, and shared focus handling.",
-      "next": "Add richer tables, command routing, and layout-aware interaction primitives that feel like a real framework instead of a demo set."
+      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, shared focus handling, and browser-targetable list/menu actions.",
+      "next": "Add richer tables, command routing, and layout-aware interaction primitives such as field-level browser targeting so this feels like a real framework instead of a demo set."
     },
     {
       "name": "WASM and Browser Host",
@@ -136,8 +136,8 @@
         "zig/build.zig",
         "zig/web"
       ],
-      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds, and can focus interactive showcase regions directly from browser hit testing while keeping the raw text frame for debugging.",
-      "next": "Push region-aware hit testing deeper into per-widget interactions and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
+      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds, can focus interactive showcase regions directly from browser hit testing, and can invoke tagged list/menu actions while keeping the raw text frame for debugging.",
+      "next": "Push region-aware hit testing deeper into field-level interactions and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
     },
     {
       "name": "Release and Repo Automation",
@@ -186,7 +186,7 @@
     "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
     "Move from line-diff rendering to a cell buffer so short updates and cursor motion are cheaper.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
-    "Push region-aware hit testing deeper so browser clicks can target individual widgets and rows, not just top-level panels.",
+    "Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]
 }
