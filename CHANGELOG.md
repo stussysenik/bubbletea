@@ -1,3 +1,15 @@
+# [0.4.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.3.0...zig-v0.4.0) (2026-03-31)
+
+
+### Bug Fixes
+
+* **zig/automation:** keep generated release docs stable ([2fa3b7b](https://github.com/stussysenik/bubbletea/commit/2fa3b7bf5634ece05516c242bf7c0cfd931c0ea5))
+
+
+### Features
+
+* **zig/automation:** track rewrite layers and release status ([6e799be](https://github.com/stussysenik/bubbletea/commit/6e799beb27ecd5f18203ff2f1afc4aec275a1df1))
+
 # [0.3.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.2.0...zig-v0.3.0) (2026-03-31)
 
 
