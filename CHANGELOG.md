@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.9.0...zig-v0.10.0) (2026-03-31)
+
+
+### Features
+
+* **zig/renderer:** add styled cell-buffer diffing ([3026b17](https://github.com/stussysenik/bubbletea/commit/3026b17f08d024685b019f7ebd434b114e454ba2))
+
 # [0.9.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.8.0...zig-v0.9.0) (2026-03-31)
 
 
