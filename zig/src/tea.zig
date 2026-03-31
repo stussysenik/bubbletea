@@ -6,6 +6,10 @@ const terminal_mod = @import("terminal.zig");
 
 /// Input key type re-exported from the decoder layer.
 pub const Key = input.Key;
+/// Keyboard modifier flags carried by richer key protocols.
+pub const KeyModifiers = input.KeyModifiers;
+/// Optional press/repeat/release metadata for decoded keys.
+pub const KeyEventKind = input.KeyEventKind;
 /// Higher-level decoded terminal event.
 pub const InputEvent = input.Event;
 /// Normalized mouse action metadata.
@@ -183,6 +187,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             alt_screen: bool = true,
             use_raw_mode: bool = true,
             poll_interval_ms: i32 = 16,
+            kitty_keyboard: bool = true,
             bracketed_paste: bool = true,
             focus_reporting: bool = true,
             mouse_mode: MouseMode = .none,
@@ -199,6 +204,7 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
                     .alt_screen = options.alt_screen,
                     .hide_cursor = true,
                     .ansi_enabled = terminal.stdout.isTty(),
+                    .kitty_keyboard = options.kitty_keyboard,
                     .bracketed_paste = options.bracketed_paste,
                     .focus_reporting = options.focus_reporting,
                     .mouse_mode = options.mouse_mode,

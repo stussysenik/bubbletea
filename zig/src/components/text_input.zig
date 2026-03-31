@@ -93,24 +93,24 @@ pub fn TextInput(comptime capacity: usize) type {
 
         /// Applies editing and cursor-motion keys.
         pub fn update(self: *Self, key: tea.Key) bool {
-            return switch (key) {
-                .character => |codepoint| self.insertCodepoint(codepoint),
-                .backspace => self.backspace(),
-                .delete => self.deleteForward(),
-                .left => self.moveLeft(),
-                .right => self.moveRight(),
-                .home => blk: {
-                    if (self.cursor == 0) break :blk false;
-                    self.cursor = 0;
-                    break :blk true;
-                },
-                .end => blk: {
-                    if (self.cursor == self.len) break :blk false;
-                    self.cursor = self.len;
-                    break :blk true;
-                },
-                else => false,
-            };
+            if (key.code == .character and key.event == .press and !key.modifiers.any()) {
+                return self.insertCodepoint(key.text);
+            }
+            if (key.isCode(.backspace)) return self.backspace();
+            if (key.isCode(.delete)) return self.deleteForward();
+            if (key.isCode(.left)) return self.moveLeft();
+            if (key.isCode(.right)) return self.moveRight();
+            if (key.isCode(.home)) {
+                if (self.cursor == 0) return false;
+                self.cursor = 0;
+                return true;
+            }
+            if (key.isCode(.end)) {
+                if (self.cursor == self.len) return false;
+                self.cursor = self.len;
+                return true;
+            }
+            return false;
         }
 
         /// Plain text fallback with a visible `|` cursor marker.
@@ -274,23 +274,23 @@ test "text input inserts navigates and deletes utf8 content" {
         .placeholder = "search",
     });
 
-    try std.testing.expect(input.update(.{ .character = 'z' }));
-    try std.testing.expect(input.update(.{ .character = 'i' }));
-    try std.testing.expect(input.update(.{ .character = 'g' }));
+    try std.testing.expect(input.update(tea.Key.character('z')));
+    try std.testing.expect(input.update(tea.Key.character('i')));
+    try std.testing.expect(input.update(tea.Key.character('g')));
     try std.testing.expectEqualStrings("zig", input.value());
 
-    try std.testing.expect(input.update(.left));
-    try std.testing.expect(input.update(.{ .character = '!' }));
+    try std.testing.expect(input.update(tea.Key.left));
+    try std.testing.expect(input.update(tea.Key.character('!')));
     try std.testing.expectEqualStrings("zi!g", input.value());
 
-    try std.testing.expect(input.update(.backspace));
+    try std.testing.expect(input.update(tea.Key.backspace));
     try std.testing.expectEqualStrings("zig", input.value());
 
-    try std.testing.expect(input.update(.home));
-    try std.testing.expect(input.update(.{ .character = 'é' }));
+    try std.testing.expect(input.update(tea.Key.home));
+    try std.testing.expect(input.update(tea.Key.character('é')));
     try std.testing.expectEqualStrings("ézig", input.value());
 
-    try std.testing.expect(input.update(.delete));
+    try std.testing.expect(input.update(tea.Key.delete));
     try std.testing.expectEqualStrings("éig", input.value());
 }
 

@@ -12,12 +12,12 @@ Generated from `automation/progress.json` on 2026-03-31.
 
 ## Overview
 
-A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.
+A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.
 
 - Status: `active`
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md)
 - Release Strategy: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
-- Latest Zig Tag: `zig-v0.11.0`
+- Latest Zig Tag: `zig-v0.12.0`
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 
 ## Status Board
@@ -30,7 +30,7 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 | Reusable components | Done | Spinner, list, badge, inspector, menu, progress bar, text input, table, and form components now live in zig/src/components, with text input now emitting a semantic cursor node instead of a literal caret glyph. |
 | Terminal styling | Done | The terminal renderer now respects view-tree tones through a styled cell buffer, handles wide glyphs safely, and can drive the real terminal cursor while headless and WASM renders stay plain. |
 | WASM host exports | Done | A freestanding WASM module with init, resize, key, paste, focus, mouse, tick, and render exports exists in zig/src/wasm_showcase.zig. |
-| Advanced terminal input | In Progress | The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, bracketed paste, focus reporting, and SGR mouse; Kitty keyboard, clipboard, and layout-aware hit testing are still ahead. |
+| Advanced terminal input | In Progress | The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, Kitty keyboard mode, bracketed paste, focus reporting, and SGR mouse; clipboard integration and layout-aware hit testing are still ahead. |
 | Higher-level app kit | In Progress | Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, and wheel navigation landed; richer command routing and interaction primitives are the next framework layer. |
 | Browser renderer | In Progress | A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions directly while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead. |
 
@@ -46,7 +46,7 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 
 ## Next
 
-- Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.
+- Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.
 - Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.
 - Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.
 - Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.

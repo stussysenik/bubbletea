@@ -229,26 +229,26 @@ fn refreshBuffers() bool {
 // Normalizes browser-side numeric key codes into runtime keys.
 fn decodeKey(code: u32) tea.Key {
     return switch (code) {
-        3 => .ctrl_c,
-        26 => .ctrl_z,
-        1001 => .up,
-        1002 => .down,
-        1003 => .left,
-        1004 => .right,
-        1005 => .home,
-        1006 => .end,
-        1007 => .delete,
-        1008 => .page_up,
-        1009 => .page_down,
-        1010 => .shift_tab,
-        9 => .tab,
-        13 => .enter,
-        27 => .escape,
-        127 => .backspace,
+        3 => tea.Key.ctrl_c,
+        26 => tea.Key.ctrl_z,
+        1001 => tea.Key.up,
+        1002 => tea.Key.down,
+        1003 => tea.Key.left,
+        1004 => tea.Key.right,
+        1005 => tea.Key.home,
+        1006 => tea.Key.end,
+        1007 => tea.Key.delete,
+        1008 => tea.Key.page_up,
+        1009 => tea.Key.page_down,
+        1010 => tea.Key.shift_tab,
+        9 => tea.Key.tab,
+        13 => tea.Key.enter,
+        27 => tea.Key.escape,
+        127 => tea.Key.backspace,
         else => if (code >= 32 and code < 0x110000)
-            .{ .character = @intCast(code) }
+            tea.Key.character(@intCast(code))
         else
-            .{ .unknown = @intCast(@min(code, 255)) },
+            tea.Key.unknown(@min(code, 255)),
     };
 }
 

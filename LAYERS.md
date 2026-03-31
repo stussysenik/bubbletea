@@ -12,7 +12,7 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 
 ## Release Line
 
-- Latest Zig Tag: `zig-v0.11.0`
+- Latest Zig Tag: `zig-v0.12.0`
 - Tag Format: `zig-v${version}`
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 - Live Status: Run `npm run release:status` for the current head commit and recent Zig-native commit subjects.
@@ -22,7 +22,7 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 | Layer | Status | Paths | Shipped | Next |
 | --- | --- | --- | --- | --- |
 | Runtime and Scheduling | Done | zig/src/cell_width.zig<br>zig/src/tea.zig<br>zig/src/headless.zig<br>zig/src/terminal.zig | Interactive and headless runtimes share one message/update model with deterministic timers and explicit terminal lifecycle management. | Fold platform event sources and richer host capabilities into the same runtime contract without borrowing Go’s goroutine-heavy shape. |
-| Input Protocols | In Progress | zig/src/input.zig<br>zig/src/tea.zig<br>zig/src/renderer.zig | The decoder now understands buffered UTF-8, CSI navigation, bracketed paste, focus reporting, and SGR mouse events. | Add Kitty keyboard protocol, clipboard hooks, and layout-aware mouse routing so higher-level widgets stop guessing about host input. |
+| Input Protocols | In Progress | zig/src/input.zig<br>zig/src/tea.zig<br>zig/src/renderer.zig | The decoder now understands buffered UTF-8, CSI navigation, Kitty keyboard CSI-u events, bracketed paste, focus reporting, and SGR mouse events, and the terminal renderer enables Kitty keyboard mode on startup. | Add clipboard hooks and layout-aware mouse routing so higher-level widgets stop guessing about host input. |
 | View Tree and Layout | Done | zig/src/ui.zig<br>zig/src/cell_width.zig | The shared scene graph can render rows, columns, boxes, spacers, rules, semantic cursor nodes, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, tags interactive regions and item actions for browser hosts, and shares terminal-cell width logic for layout-sensitive text. | Push the same metadata deeper into field-level interactions and richer layout metadata so hit testing, scrolling regions, and cross-host renderers can share more than terminal-sized boxes. |
 | Renderer | In Progress | zig/src/renderer.zig<br>zig/src/ui.zig<br>zig/src/cell_width.zig | ANSI rendering now parses the composed frame into styled cells, diffs per-glyph runs instead of whole lines, keeps wide glyphs and combining sequences aligned to real terminal columns, and can drive the real terminal cursor from semantic cursor nodes in the shared tree. | Add tougher grapheme-cluster edge cases, terminal cursor shape/blink control, and host-specific effects on top of the new cell grid. |
 | Components and App Kit | In Progress | zig/src/components<br>zig/src/focus.zig<br>zig/src/apps/showcase.zig | The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, shared focus handling, and browser-targetable list/menu actions. | Add richer tables, command routing, and layout-aware interaction primitives such as field-level browser targeting so this feels like a real framework instead of a demo set. |
@@ -44,7 +44,7 @@ Generated from `automation/progress.json` and local git state on 2026-03-31.
 
 ## Immediate Order
 
-- Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.
+- Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.
 - Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.
 - Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.
 - Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.

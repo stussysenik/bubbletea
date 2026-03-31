@@ -107,10 +107,10 @@ pub fn App(comptime Msg: type) type {
         pub fn update(self: *Self, msg: Msg) !tea.Update(Msg) {
             switch (msg) {
                 .key => |key| {
-                    if (key == .ctrl_c) return tea.Update(Msg).quitNow();
+                    if (key.isCode(.ctrl_c)) return tea.Update(Msg).quitNow();
                     if (key.isCharacter('q')) return tea.Update(Msg).quitNow();
 
-                    if (key == .page_up or key == .page_down) {
+                    if (key.isCode(.page_up) or key.isCode(.page_down)) {
                         if (self.focus.update(key)) {
                             self.syncFocus();
                             return .{};
@@ -638,20 +638,20 @@ test "showcase routes outer focus into the draft form" {
     try std.testing.expect(!(try program.drain()));
     try std.testing.expect(program.model.focus.isFocused(zone_filter));
 
-    try program.send(.{ .key = .page_down });
-    try program.send(.{ .key = .page_down });
-    try program.send(.{ .key = .page_down });
+    try program.send(.{ .key = tea.Key.page_down });
+    try program.send(.{ .key = tea.Key.page_down });
+    try program.send(.{ .key = tea.Key.page_down });
     try std.testing.expect(!(try program.drain()));
     try std.testing.expect(program.model.focus.isFocused(zone_form));
 
-    try program.send(.{ .key = .{ .character = 'd' } });
-    try program.send(.{ .key = .{ .character = 'e' } });
-    try program.send(.{ .key = .{ .character = 'm' } });
-    try program.send(.{ .key = .{ .character = 'o' } });
-    try program.send(.{ .key = .tab });
-    try program.send(.{ .key = .{ .character = 'c' } });
-    try program.send(.{ .key = .{ .character = 'm' } });
-    try program.send(.{ .key = .{ .character = 'd' } });
+    try program.send(.{ .key = tea.Key.character('d') });
+    try program.send(.{ .key = tea.Key.character('e') });
+    try program.send(.{ .key = tea.Key.character('m') });
+    try program.send(.{ .key = tea.Key.character('o') });
+    try program.send(.{ .key = tea.Key.tab });
+    try program.send(.{ .key = tea.Key.character('c') });
+    try program.send(.{ .key = tea.Key.character('m') });
+    try program.send(.{ .key = tea.Key.character('d') });
     try std.testing.expect(!(try program.drain()));
 
     try std.testing.expectEqualStrings("demo", program.model.draft.valueById("name").?);
@@ -674,9 +674,9 @@ test "showcase accepts paste and focus events" {
     try std.testing.expect(!(try program.drain()));
     try std.testing.expect(!program.model.terminal_focused);
 
-    try program.send(.{ .key = .page_down });
-    try program.send(.{ .key = .page_down });
-    try program.send(.{ .key = .page_down });
+    try program.send(.{ .key = tea.Key.page_down });
+    try program.send(.{ .key = tea.Key.page_down });
+    try program.send(.{ .key = tea.Key.page_down });
     try program.send(.{ .paste = "zig-app" });
     try std.testing.expect(!(try program.drain()));
     try std.testing.expectEqualStrings("zig-app", program.model.draft.valueById("name").?);
@@ -694,7 +694,7 @@ test "showcase list reacts to mouse wheel when focused" {
     defer program.deinit();
 
     try std.testing.expect(!(try program.drain()));
-    try program.send(.{ .key = .page_down });
+    try program.send(.{ .key = tea.Key.page_down });
     try std.testing.expect(!(try program.drain()));
     try std.testing.expect(program.model.focus.isFocused(zone_list));
 
@@ -761,13 +761,13 @@ test "showcase menu applies scaffold presets" {
     defer program.deinit();
 
     try std.testing.expect(!(try program.drain()));
-    try program.send(.{ .key = .page_down });
-    try program.send(.{ .key = .page_down });
+    try program.send(.{ .key = tea.Key.page_down });
+    try program.send(.{ .key = tea.Key.page_down });
     try std.testing.expect(!(try program.drain()));
     try std.testing.expect(program.model.focus.isFocused(zone_menu));
 
-    try program.send(.{ .key = .down });
-    try program.send(.{ .key = .enter });
+    try program.send(.{ .key = tea.Key.down });
+    try program.send(.{ .key = tea.Key.enter });
     try std.testing.expect(!(try program.drain()));
     try std.testing.expect(program.model.focus.isFocused(zone_form));
     try std.testing.expectEqualStrings("bubbletea-zig-unified", program.model.draft.valueById("name").?);

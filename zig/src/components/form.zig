@@ -262,10 +262,10 @@ test "form cycles focus and edits fields" {
         .help = "tab moves between fields",
     });
 
-    try std.testing.expect(form.update(.{ .character = 'a' }));
+    try std.testing.expect(form.update(tea.Key.character('a')));
     try std.testing.expectEqualStrings("a", form.value(0));
-    try std.testing.expect(form.update(.tab));
-    try std.testing.expect(form.update(.{ .character = 'b' }));
+    try std.testing.expect(form.update(tea.Key.tab));
+    try std.testing.expect(form.update(tea.Key.character('b')));
     try std.testing.expectEqualStrings("b", form.valueById("cmd").?);
 }
 
@@ -300,7 +300,7 @@ test "form pastes into the focused field" {
 
     try std.testing.expect(form.paste("zig"));
     try std.testing.expectEqualStrings("zig", form.valueById("name").?);
-    try std.testing.expect(form.update(.tab));
+    try std.testing.expect(form.update(tea.Key.tab));
     try std.testing.expect(form.paste("build run"));
     try std.testing.expectEqualStrings("build run", form.valueById("cmd").?);
 }
@@ -318,7 +318,7 @@ test "form validation tracks missing and short fields" {
     try std.testing.expectEqualStrings("too short", form.validationMessage(1).?);
 
     try std.testing.expect(form.paste("zig"));
-    try std.testing.expect(form.update(.tab));
+    try std.testing.expect(form.update(tea.Key.tab));
     try std.testing.expect(form.paste("run"));
     try std.testing.expect(form.isValid());
     try std.testing.expectEqual(@as(usize, 0), form.invalidCount());

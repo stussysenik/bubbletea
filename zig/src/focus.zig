@@ -57,13 +57,11 @@ pub const FocusRing = struct {
 
     /// Applies standard focus-navigation keys.
     pub fn update(self: *FocusRing, key: tea.Key) bool {
-        return switch (key) {
-            .tab, .page_down => self.next(),
-            .shift_tab, .page_up => self.previous(),
-            .home => self.focus(0),
-            .end => self.focus(if (self.count == 0) 0 else self.count - 1),
-            else => false,
-        };
+        if (key.isCode(.tab) or key.isCode(.page_down)) return self.next();
+        if (key.isCode(.shift_tab) or key.isCode(.page_up)) return self.previous();
+        if (key.isCode(.home)) return self.focus(0);
+        if (key.isCode(.end)) return self.focus(if (self.count == 0) 0 else self.count - 1);
+        return false;
     }
 };
 

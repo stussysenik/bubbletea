@@ -36,30 +36,28 @@ pub const List = struct {
     pub fn update(self: *List, key: tea.Key) bool {
         if (self.items.len == 0) return false;
 
-        switch (key) {
-            .up => {
-                if (self.selected == 0) return false;
-                self.selected -= 1;
-                return true;
-            },
-            .down => {
-                if (self.selected + 1 >= self.items.len) return false;
-                self.selected += 1;
-                return true;
-            },
-            .home => {
-                if (self.selected == 0) return false;
-                self.selected = 0;
-                return true;
-            },
-            .end => {
-                const last_index = self.items.len - 1;
-                if (self.selected == last_index) return false;
-                self.selected = last_index;
-                return true;
-            },
-            else => return false,
+        if (key.isCode(.up)) {
+            if (self.selected == 0) return false;
+            self.selected -= 1;
+            return true;
         }
+        if (key.isCode(.down)) {
+            if (self.selected + 1 >= self.items.len) return false;
+            self.selected += 1;
+            return true;
+        }
+        if (key.isCode(.home)) {
+            if (self.selected == 0) return false;
+            self.selected = 0;
+            return true;
+        }
+        if (key.isCode(.end)) {
+            const last_index = self.items.len - 1;
+            if (self.selected == last_index) return false;
+            self.selected = last_index;
+            return true;
+        }
+        return false;
     }
 
     /// Applies wheel events without requiring the caller to map them to keys.
@@ -67,8 +65,8 @@ pub const List = struct {
         if (mouse.action != .scroll) return false;
 
         return switch (mouse.button) {
-            .wheel_up => self.update(.up),
-            .wheel_down => self.update(.down),
+            .wheel_up => self.update(tea.Key.up),
+            .wheel_down => self.update(tea.Key.down),
             else => false,
         };
     }
@@ -143,12 +141,12 @@ test "list navigation stays in bounds" {
     const items = [_][]const u8{ "one", "two", "three" };
     var list = List.init(&items);
 
-    try std.testing.expect(list.update(.down));
+    try std.testing.expect(list.update(tea.Key.down));
     try std.testing.expectEqual(@as(usize, 1), list.selected);
-    try std.testing.expect(list.update(.down));
+    try std.testing.expect(list.update(tea.Key.down));
     try std.testing.expectEqual(@as(usize, 2), list.selected);
-    try std.testing.expect(!list.update(.down));
-    try std.testing.expect(list.update(.up));
+    try std.testing.expect(!list.update(tea.Key.down));
+    try std.testing.expect(list.update(tea.Key.up));
     try std.testing.expectEqual(@as(usize, 1), list.selected);
 }
 

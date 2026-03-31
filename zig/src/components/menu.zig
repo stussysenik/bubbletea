@@ -48,30 +48,28 @@ pub const Menu = struct {
     pub fn update(self: *Menu, key: tea.Key) bool {
         if (self.items.len == 0) return false;
 
-        switch (key) {
-            .up => {
-                if (self.selected == 0) return false;
-                self.selected -= 1;
-                return true;
-            },
-            .down => {
-                if (self.selected + 1 >= self.items.len) return false;
-                self.selected += 1;
-                return true;
-            },
-            .home => {
-                if (self.selected == 0) return false;
-                self.selected = 0;
-                return true;
-            },
-            .end => {
-                const last_index = self.items.len - 1;
-                if (self.selected == last_index) return false;
-                self.selected = last_index;
-                return true;
-            },
-            else => return false,
+        if (key.isCode(.up)) {
+            if (self.selected == 0) return false;
+            self.selected -= 1;
+            return true;
         }
+        if (key.isCode(.down)) {
+            if (self.selected + 1 >= self.items.len) return false;
+            self.selected += 1;
+            return true;
+        }
+        if (key.isCode(.home)) {
+            if (self.selected == 0) return false;
+            self.selected = 0;
+            return true;
+        }
+        if (key.isCode(.end)) {
+            const last_index = self.items.len - 1;
+            if (self.selected == last_index) return false;
+            self.selected = last_index;
+            return true;
+        }
+        return false;
     }
 
     /// Applies wheel input without forcing callers to translate it.
@@ -79,8 +77,8 @@ pub const Menu = struct {
         if (mouse.action != .scroll) return false;
 
         return switch (mouse.button) {
-            .wheel_up => self.update(.up),
-            .wheel_down => self.update(.down),
+            .wheel_up => self.update(tea.Key.up),
+            .wheel_down => self.update(tea.Key.down),
             else => false,
         };
     }
@@ -88,11 +86,7 @@ pub const Menu = struct {
     /// Reports whether a key should activate the selected menu item.
     pub fn shouldActivate(self: *const Menu, key: tea.Key) bool {
         _ = self;
-        return switch (key) {
-            .enter => true,
-            .character => |value| value == ' ',
-            else => false,
-        };
+        return key.isCode(.enter) or key.isCharacter(' ');
     }
 
     /// Plain text fallback for simple hosts and tests.
@@ -187,10 +181,10 @@ test "menu navigates and activates items" {
     };
 
     var menu = Menu.init(&items);
-    try std.testing.expect(menu.update(.down));
+    try std.testing.expect(menu.update(tea.Key.down));
     try std.testing.expectEqual(@as(usize, 1), menu.selected);
-    try std.testing.expect(menu.shouldActivate(.enter));
-    try std.testing.expect(menu.shouldActivate(.{ .character = ' ' }));
+    try std.testing.expect(menu.shouldActivate(tea.Key.enter));
+    try std.testing.expect(menu.shouldActivate(tea.Key.character(' ')));
 }
 
 test "menu composes detail text" {

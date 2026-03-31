@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, and item-level browser actions from the same WASM-backed runtime.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -61,7 +61,7 @@
     {
       "name": "Advanced terminal input",
       "status": "in_progress",
-      "details": "The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, bracketed paste, focus reporting, and SGR mouse; Kitty keyboard, clipboard, and layout-aware hit testing are still ahead."
+      "details": "The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, Kitty keyboard mode, bracketed paste, focus reporting, and SGR mouse; clipboard integration and layout-aware hit testing are still ahead."
     },
     {
       "name": "Higher-level app kit",
@@ -95,8 +95,8 @@
         "zig/src/tea.zig",
         "zig/src/renderer.zig"
       ],
-      "shipped": "The decoder now understands buffered UTF-8, CSI navigation, bracketed paste, focus reporting, and SGR mouse events.",
-      "next": "Add Kitty keyboard protocol, clipboard hooks, and layout-aware mouse routing so higher-level widgets stop guessing about host input."
+      "shipped": "The decoder now understands buffered UTF-8, CSI navigation, Kitty keyboard CSI-u events, bracketed paste, focus reporting, and SGR mouse events, and the terminal renderer enables Kitty keyboard mode on startup.",
+      "next": "Add clipboard hooks and layout-aware mouse routing so higher-level widgets stop guessing about host input."
     },
     {
       "name": "View Tree and Layout",
@@ -187,7 +187,7 @@
     }
   ],
   "next": [
-    "Finish protocol-heavy terminal features such as Kitty keyboard support, clipboard integration, and layout-aware mouse hit testing.",
+    "Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.",
     "Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
     "Push region-aware hit testing deeper so browser clicks can target individual fields and richer widget internals, not just panels and list/menu rows.",

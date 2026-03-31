@@ -7,6 +7,7 @@ pub const Options = struct {
     alt_screen: bool = true,
     hide_cursor: bool = true,
     ansi_enabled: bool = true,
+    kitty_keyboard: bool = true,
     bracketed_paste: bool = true,
     focus_reporting: bool = true,
     mouse_mode: MouseMode = .none,
@@ -62,6 +63,11 @@ pub const Renderer = struct {
         if (self.options.alt_screen) {
             try buffer.appendSlice(self.allocator, "\x1b[?1049h");
         }
+        // Kitty's keyboard mode stack restores cleanly with CSI < u on exit,
+        // which makes it safe to opt into simpler unambiguous key encoding.
+        if (self.options.kitty_keyboard) {
+            try buffer.appendSlice(self.allocator, "\x1b[>1u");
+        }
         if (self.options.hide_cursor) {
             try buffer.appendSlice(self.allocator, "\x1b[?25l");
         }
@@ -99,6 +105,9 @@ pub const Renderer = struct {
             .click => try buffer.appendSlice(self.allocator, "\x1b[?1000l\x1b[?1006l"),
             .drag => try buffer.appendSlice(self.allocator, "\x1b[?1002l\x1b[?1006l"),
             .motion => try buffer.appendSlice(self.allocator, "\x1b[?1003l\x1b[?1006l"),
+        }
+        if (self.options.kitty_keyboard) {
+            try buffer.appendSlice(self.allocator, "\x1b[<u");
         }
         if (self.options.focus_reporting) {
             try buffer.appendSlice(self.allocator, "\x1b[?1004l");
