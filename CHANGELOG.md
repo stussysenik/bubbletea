@@ -1,3 +1,10 @@
+# [0.16.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.15.0...zig-v0.16.0) (2026-04-01)
+
+
+### Features
+
+* **zig/runtime:** freeze lifecycle and ui contracts ([aafbd8e](https://github.com/stussysenik/bubbletea/commit/aafbd8e0b61f6f8d233a0ecb22778975eb0d88a1))
+
 # [0.15.0](https://github.com/stussysenik/bubbletea/compare/zig-v0.14.0...zig-v0.15.0) (2026-03-31)
 
 
