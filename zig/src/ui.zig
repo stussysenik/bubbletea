@@ -106,6 +106,17 @@ pub const Cursor = struct {
     y: usize,
 };
 
+/// Stable node kinds exposed through structured snapshots and hit testing.
+pub const NodeKind = enum {
+    text,
+    cursor,
+    row,
+    column,
+    box,
+    spacer,
+    rule,
+};
+
 /// Shared frame output returned by the composed UI tree.
 pub const RenderSnapshot = struct {
     frame: []const u8,
@@ -189,6 +200,26 @@ pub const LayoutFrame = struct {
     y: usize,
     width: usize,
     height: usize,
+
+    /// Returns true when one cell coordinate falls inside the frame.
+    pub fn contains(self: LayoutFrame, x: usize, y: usize) bool {
+        return x >= self.x and y >= self.y and x < self.x + self.width and y < self.y + self.height;
+    }
+};
+
+/// Shared pointer target resolved from layout metadata.
+pub const HitTarget = struct {
+    node_kind: NodeKind,
+    bounds: LayoutFrame,
+    local_x: usize,
+    local_y: usize,
+    region: ?[]const u8 = null,
+    action: ?Action = null,
+
+    /// Returns true when the hit carries semantic routing metadata.
+    pub fn hasSemanticTarget(self: HitTarget) bool {
+        return self.region != null or self.action != null;
+    }
 };
 
 /// Arena-backed scene graph used to compose one frame at a time.
@@ -335,6 +366,22 @@ pub const Tree = struct {
         try writeNodeJson(self, writer, root);
     }
 
+    /// Resolves one cell coordinate against the composed tree and returns the
+    /// deepest hit plus any inherited region/action metadata.
+    pub fn hitTest(self: *const Tree, root: NodeId, x: usize, y: usize) ?HitTarget {
+        return hitTestNode(self, root, .{}, x, y, null, null);
+    }
+
+    /// Finds one action-bearing box by semantic kind and value.
+    pub fn findAction(self: *const Tree, root: NodeId, kind: []const u8, value: usize) ?LayoutFrame {
+        return findActionNode(self, root, .{}, kind, value);
+    }
+
+    /// Finds one region-bearing box by semantic name.
+    pub fn findRegion(self: *const Tree, root: NodeId, region: []const u8) ?LayoutFrame {
+        return findRegionNode(self, root, .{}, region);
+    }
+
     fn appendChildren(self: *Tree, values: []const NodeId) !ChildRange {
         const start = self.children.items.len;
         try self.children.appendSlice(self.allocator(), values);
@@ -452,11 +499,198 @@ pub fn renderModelJson(
     @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
 }
 
+/// Resolves one cell coordinate against a compose-capable model.
+pub fn hitTestModel(
+    comptime ModelType: type,
+    allocator: std.mem.Allocator,
+    model: *const ModelType,
+    x: usize,
+    y: usize,
+) !?HitTarget {
+    if (@hasDecl(ModelType, "compose")) {
+        var tree = Tree.init(allocator);
+        defer tree.deinit();
+
+        const root = try model.compose(&tree);
+        return tree.hitTest(root, x, y);
+    }
+
+    if (@hasDecl(ModelType, "view")) return null;
+    @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
+}
+
+/// Finds one action frame against a compose-capable model.
+pub fn findActionModel(
+    comptime ModelType: type,
+    allocator: std.mem.Allocator,
+    model: *const ModelType,
+    kind: []const u8,
+    value: usize,
+) !?LayoutFrame {
+    if (@hasDecl(ModelType, "compose")) {
+        var tree = Tree.init(allocator);
+        defer tree.deinit();
+
+        const root = try model.compose(&tree);
+        return tree.findAction(root, kind, value);
+    }
+
+    if (@hasDecl(ModelType, "view")) return null;
+    @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
+}
+
+/// Finds one region frame against a compose-capable model.
+pub fn findRegionModel(
+    comptime ModelType: type,
+    allocator: std.mem.Allocator,
+    model: *const ModelType,
+    region: []const u8,
+) !?LayoutFrame {
+    if (@hasDecl(ModelType, "compose")) {
+        var tree = Tree.init(allocator);
+        defer tree.deinit();
+
+        const root = try model.compose(&tree);
+        return tree.findRegion(root, region);
+    }
+
+    if (@hasDecl(ModelType, "view")) return null;
+    @compileError("ModelType must declare either compose(self: *const ModelType, tree: *ui.Tree) !ui.NodeId or view(self: *const ModelType, writer: anytype) !void");
+}
+
 // Emits one node and any recursive children as a browser-consumable JSON
 // object. This keeps the browser bridge thin while still reusing the real Zig
 // composition tree.
 fn writeNodeJson(tree: *const Tree, writer: anytype, node_id: NodeId) !void {
     try writeNodeJsonAt(tree, writer, node_id, .{});
+}
+
+// Resolves one coordinate against the composed layout and carries inherited
+// semantic metadata from boxes that own regions or actions.
+fn hitTestNode(
+    tree: *const Tree,
+    node_id: NodeId,
+    origin: LayoutOrigin,
+    x: usize,
+    y: usize,
+    inherited_region: ?[]const u8,
+    inherited_action: ?Action,
+) ?HitTarget {
+    const size = measureNode(tree, node_id);
+    const frame = makeFrame(origin, size);
+    if (!frame.contains(x, y)) return null;
+
+    const node = tree.nodes.items[node_id];
+    const node_kind = nodeKind(node);
+    const next_region = switch (node) {
+        .box => |box_node| box_node.region orelse inherited_region,
+        else => inherited_region,
+    };
+    const next_action = switch (node) {
+        .box => |box_node| box_node.action orelse inherited_action,
+        else => inherited_action,
+    };
+
+    switch (node) {
+        .stack => |stack_node| {
+            const children = tree.childrenFor(stack_node.children);
+            var child_origin = origin;
+            for (children) |child_id| {
+                if (hitTestNode(tree, child_id, child_origin, x, y, next_region, next_action)) |hit| {
+                    return hit;
+                }
+
+                const child_size = measureNode(tree, child_id);
+                switch (stack_node.axis) {
+                    .horizontal => child_origin.x += child_size.width + stack_node.gap,
+                    .vertical => child_origin.y += child_size.height + stack_node.gap,
+                }
+            }
+        },
+        .box => |box_node| {
+            const child_size = measureNode(tree, box_node.child);
+            if (hitTestNode(tree, box_node.child, boxChildOrigin(origin, box_node, child_size), x, y, next_region, next_action)) |hit| {
+                return hit;
+            }
+        },
+        else => {},
+    }
+
+    if (next_region == null and next_action == null) return null;
+    return .{
+        .node_kind = node_kind,
+        .bounds = frame,
+        .local_x = x - frame.x,
+        .local_y = y - frame.y,
+        .region = next_region,
+        .action = next_action,
+    };
+}
+
+// Finds one action-bearing node frame by semantic identifier.
+fn findActionNode(tree: *const Tree, node_id: NodeId, origin: LayoutOrigin, kind: []const u8, value: usize) ?LayoutFrame {
+    const node = tree.nodes.items[node_id];
+    const size = measureNode(tree, node_id);
+    const frame = makeFrame(origin, size);
+
+    switch (node) {
+        .box => |box_node| {
+            if (box_node.action) |action| {
+                if (std.mem.eql(u8, action.kind, kind) and action.value == value) return frame;
+            }
+
+            const child_size = measureNode(tree, box_node.child);
+            return findActionNode(tree, box_node.child, boxChildOrigin(origin, box_node, child_size), kind, value);
+        },
+        .stack => |stack_node| {
+            const children = tree.childrenFor(stack_node.children);
+            var child_origin = origin;
+            for (children) |child_id| {
+                if (findActionNode(tree, child_id, child_origin, kind, value)) |hit| return hit;
+                const child_size = measureNode(tree, child_id);
+                switch (stack_node.axis) {
+                    .horizontal => child_origin.x += child_size.width + stack_node.gap,
+                    .vertical => child_origin.y += child_size.height + stack_node.gap,
+                }
+            }
+        },
+        else => {},
+    }
+
+    return null;
+}
+
+// Finds one region-bearing node frame by semantic identifier.
+fn findRegionNode(tree: *const Tree, node_id: NodeId, origin: LayoutOrigin, region: []const u8) ?LayoutFrame {
+    const node = tree.nodes.items[node_id];
+    const size = measureNode(tree, node_id);
+    const frame = makeFrame(origin, size);
+
+    switch (node) {
+        .box => |box_node| {
+            if (box_node.region) |node_region| {
+                if (std.mem.eql(u8, node_region, region)) return frame;
+            }
+
+            const child_size = measureNode(tree, box_node.child);
+            return findRegionNode(tree, box_node.child, boxChildOrigin(origin, box_node, child_size), region);
+        },
+        .stack => |stack_node| {
+            const children = tree.childrenFor(stack_node.children);
+            var child_origin = origin;
+            for (children) |child_id| {
+                if (findRegionNode(tree, child_id, child_origin, region)) |hit| return hit;
+                const child_size = measureNode(tree, child_id);
+                switch (stack_node.axis) {
+                    .horizontal => child_origin.x += child_size.width + stack_node.gap,
+                    .vertical => child_origin.y += child_size.height + stack_node.gap,
+                }
+            }
+        },
+        else => {},
+    }
+
+    return null;
 }
 
 // Walks the scene graph in layout order so every serialized node carries its
@@ -666,6 +900,18 @@ fn measureNode(tree: *const Tree, node_id: NodeId) LayoutSize {
             .width = ruleWidth(rule_node),
             .height = 1,
         },
+    };
+}
+
+// Exposes the structured node kind used by JSON snapshots and hit testing.
+fn nodeKind(node: Node) NodeKind {
+    return switch (node) {
+        .text => .text,
+        .cursor => .cursor,
+        .stack => |stack_node| if (stack_node.axis == .horizontal) .row else .column,
+        .box => .box,
+        .spacer => .spacer,
+        .rule => .rule,
     };
 }
 
@@ -1364,4 +1610,62 @@ test "renderModelSnapshot returns frame bytes and semantic cursor" {
 
     try std.testing.expectEqualStrings("abcd", snapshot.frame);
     try std.testing.expectEqual(@as(?Cursor, .{ .x = 2, .y = 0 }), snapshot.cursor);
+}
+
+test "tree hit testing carries nested region and action metadata" {
+    var tree = Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const row = try tree.box(
+        try tree.text("one"),
+        .{
+            .action = .{
+                .kind = "list_item",
+                .value = 1,
+            },
+            .border = .none,
+        },
+    );
+    const panel = try tree.box(
+        row,
+        .{
+            .region = "list",
+            .padding = Insets.symmetric(0, 1),
+        },
+    );
+
+    const hit = tree.hitTest(panel, 1, 1).?;
+    try std.testing.expectEqual(NodeKind.text, hit.node_kind);
+    try std.testing.expectEqualStrings("list", hit.region.?);
+    try std.testing.expectEqualStrings("list_item", hit.action.?.kind);
+    try std.testing.expectEqual(@as(usize, 1), hit.action.?.value);
+}
+
+test "tree can find action and region frames" {
+    var tree = Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const row = try tree.box(
+        try tree.text("one"),
+        .{
+            .action = .{
+                .kind = "list_item",
+                .value = 1,
+            },
+            .border = .none,
+        },
+    );
+    const panel = try tree.box(
+        row,
+        .{
+            .region = "list",
+            .padding = Insets.symmetric(0, 1),
+        },
+    );
+
+    const action_frame = tree.findAction(panel, "list_item", 1).?;
+    const region_frame = tree.findRegion(panel, "list").?;
+    try std.testing.expect(action_frame.width <= region_frame.width);
+    try std.testing.expect(action_frame.height <= region_frame.height);
+    try std.testing.expect(region_frame.contains(action_frame.x, action_frame.y));
 }

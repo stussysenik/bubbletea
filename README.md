@@ -33,8 +33,8 @@ To get started, see the tutorial below, the [examples][examples], the
 
 <!-- zig-rewrite:start -->
 - Status: `active`
-- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.
-- Progress Board: 6 done, 3 in progress, 0 planned
+- Rewrite Summary: A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, OSC52 clipboard flows, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, shared layout-aware hit testing, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, direct form-field targeting, and clipboard effect bridging from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.
+- Progress Board: 7 done, 2 in progress, 0 planned
 - Docs: [zig/README.md](./zig/README.md), [PROGRESS.md](./PROGRESS.md), [LAYERS.md](./LAYERS.md), [openspec/README.md](./openspec/README.md)
 - Planning: [openspec/project.md](./openspec/project.md), [openspec/changes/rewrite-bubbletea-in-zig](./openspec/changes/rewrite-bubbletea-in-zig)
 - Latest Zig Tag: `zig-v0.15.0`

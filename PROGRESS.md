@@ -12,7 +12,7 @@ Generated from `automation/progress.json` on 2026-04-01.
 
 ## Overview
 
-A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.
+A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, OSC52 clipboard flows, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, shared layout-aware hit testing, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, direct form-field targeting, and clipboard effect bridging from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.
 
 - Status: `active`
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md), [OpenSpec](./openspec/README.md)
@@ -31,9 +31,9 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 | Reusable components | Done | Spinner, list, badge, inspector, menu, progress bar, text input, table, and form components now live in zig/src/components, with text input now emitting a semantic cursor node instead of a literal caret glyph. |
 | Terminal styling | Done | The terminal renderer now respects view-tree tones through a styled cell buffer, handles wide glyphs safely, and can drive the real terminal cursor while headless and WASM renders stay plain. |
 | WASM host exports | Done | A freestanding WASM module with init, resize, key, paste, focus, mouse, tick, and render exports exists in zig/src/wasm_showcase.zig. |
-| Advanced terminal input | In Progress | The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, Kitty keyboard mode, bracketed paste, focus reporting, and SGR mouse; clipboard integration and layout-aware hit testing are still ahead. |
-| Higher-level app kit | In Progress | Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, wheel navigation, and browser-targetable form fields landed; richer command routing and interaction primitives are the next framework layer. |
-| Browser renderer | In Progress | A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions plus direct form-field focus while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead. |
+| Advanced terminal input | Done | The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, Kitty keyboard mode, bracketed paste, focus reporting, SGR mouse, OSC52 clipboard read/write flows, and shared layout-aware hit testing for pointer routing. |
+| Higher-level app kit | In Progress | Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, wheel navigation, browser-targetable form fields, and shared semantic mouse routing landed; richer command routing and interaction primitives are the next framework layer. |
+| Browser renderer | In Progress | A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, routes pointer actions through the same shared hit-testing path used by terminal hosts, drains clipboard effects, and keeps the raw text frame available for debugging; richer per-widget web rendering is still ahead. |
 
 ## Verification
 
@@ -47,8 +47,9 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 
 ## Next
 
-- Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.
 - Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.
+- Add explicit invalidation and repaint expectations so partial frame updates stay correct as the renderer grows beyond the showcase.
+- Push shared hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.
 - Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the newly documented public app-kit surface.
-- Push region-aware hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.
+- Separate stable reusable widgets from showcase-only composition code so the package boundary keeps getting tighter as features land.
 - Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes.

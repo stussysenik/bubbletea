@@ -13,19 +13,6 @@ const SPECIAL_KEYS = Object.freeze({
   ShiftTab: 1010,
 });
 
-const REGION_CODES = Object.freeze({
-  filter: 1,
-  list: 2,
-  menu: 3,
-  form: 4,
-});
-
-const ACTION_CODES = Object.freeze({
-  list_item: 1,
-  menu_item: 2,
-  form_field: 3,
-});
-
 const POINTER_BUTTONS = Object.freeze({
   0: 1,
   1: 2,
@@ -173,6 +160,8 @@ function normalizeKey(event) {
   if (event.ctrlKey && !event.altKey) {
     const lowerKey = event.key.toLowerCase();
     if (lowerKey === "c") return 3;
+    if (lowerKey === "r") return 18;
+    if (lowerKey === "y") return 25;
     if (lowerKey === "z") return 26;
     return null;
   }
@@ -231,12 +220,11 @@ function sendPasteText(text) {
   }
 
   renderOutputs();
+  queueClipboardDrain();
 }
 
 function handleMouseDown(event) {
   focusTerminal();
-  focusRegionFromEvent(event);
-  dispatchActionFromEvent(event);
   event.preventDefault();
   dispatchMouse(event, POINTER_ACTIONS.press);
 }
@@ -256,7 +244,6 @@ function handleMouseMove(event) {
 function handleWheel(event) {
   if (!state.exports) return;
   event.preventDefault();
-  focusRegionFromEvent(event);
 
   const button =
     Math.abs(event.deltaX) > Math.abs(event.deltaY)
@@ -359,6 +346,7 @@ function frameLoop(timestamp) {
     state.lastTimestamp = timestamp;
     if (state.exports.bt_tick(Math.round(delta))) {
       renderOutputs();
+      queueClipboardDrain();
     }
   }
 
@@ -371,6 +359,7 @@ function sendRuntime(call, label) {
     return;
   }
   renderOutputs();
+  queueClipboardDrain();
 }
 
 function renderOutputs() {
@@ -557,58 +546,6 @@ function buildRuleNode(node, metrics) {
   return element;
 }
 
-function focusRegionFromEvent(event) {
-  if (!state.exports) return;
-
-  const regionName = regionNameFromEvent(event);
-  if (!regionName) return;
-
-  const regionCode = REGION_CODES[regionName];
-  if (!regionCode) return;
-
-  sendRuntime(() => state.exports.bt_focus_region(regionCode), `region ${regionName}`);
-}
-
-function dispatchActionFromEvent(event) {
-  if (!state.exports) return;
-
-  const action = actionFromEvent(event);
-  if (!action) return;
-
-  const actionCode = ACTION_CODES[action.kind];
-  if (!actionCode) return;
-
-  const value = Number.parseInt(action.value, 10);
-  if (!Number.isFinite(value)) return;
-
-  sendRuntime(() => state.exports.bt_send_action(actionCode, value), `action ${action.kind}:${value}`);
-}
-
-function regionNameFromEvent(event) {
-  const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
-  for (const element of elementsAtPoint) {
-    const regionHost = element.closest?.("[data-region]");
-    if (regionHost?.dataset.region) {
-      return regionHost.dataset.region;
-    }
-  }
-  return null;
-}
-
-function actionFromEvent(event) {
-  const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
-  for (const element of elementsAtPoint) {
-    const actionHost = element.closest?.("[data-action-kind]");
-    if (actionHost?.dataset.actionKind) {
-      return {
-        kind: actionHost.dataset.actionKind,
-        value: actionHost.dataset.actionValue ?? "",
-      };
-    }
-  }
-  return null;
-}
-
 function applyNodeLayout(element, layout, metrics, options = {}) {
   if (!layout) return;
 
@@ -744,4 +681,63 @@ function validateAction(action) {
   if (!Number.isInteger(action.value) || action.value < 0) {
     throw new Error("box action has invalid value");
   }
+}
+
+let clipboardDrain = Promise.resolve();
+
+function queueClipboardDrain() {
+  clipboardDrain = clipboardDrain.then(() => drainClipboardEffects()).catch((error) => {
+    setRuntimeStatus(`clipboard sync failed: ${error.message}`);
+  });
+}
+
+async function drainClipboardEffects() {
+  if (!state.exports) return;
+
+  while (true) {
+    const kind = state.exports.bt_clipboard_effect_kind();
+    if (kind === 0) return;
+
+    if (kind === 1) {
+      const text = readClipboardWrite();
+      state.exports.bt_clear_clipboard_effect();
+      if (!navigator.clipboard?.writeText) {
+        setRuntimeStatus("browser clipboard write unavailable");
+        continue;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (error) {
+        setRuntimeStatus(`clipboard write failed: ${error.message}`);
+      }
+      continue;
+    }
+
+    if (kind === 2) {
+      state.exports.bt_clear_clipboard_effect();
+      if (!navigator.clipboard?.readText) {
+        setRuntimeStatus("browser clipboard read unavailable");
+        continue;
+      }
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text.length !== 0) {
+          sendPasteText(text);
+        }
+      } catch (error) {
+        setRuntimeStatus(`clipboard read failed: ${error.message}`);
+      }
+      continue;
+    }
+
+    setRuntimeStatus(`unknown clipboard effect: ${kind}`);
+    state.exports.bt_clear_clipboard_effect();
+  }
+}
+
+function readClipboardWrite() {
+  const ptr = state.exports.bt_clipboard_ptr();
+  const len = state.exports.bt_clipboard_len();
+  const bytes = new Uint8Array(state.exports.memory.buffer, ptr, len);
+  return textDecoder.decode(bytes);
 }

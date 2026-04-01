@@ -16,9 +16,9 @@ The rewrite is no longer a blank-slate port. It already has real runtime, UI tre
 - `zig/src/headless.zig`: deterministic host-agnostic runtime
 - `zig/src/ui.zig`: composable scene graph, layout, JSON snapshots, semantic cursor nodes
 - `zig/src/renderer.zig`: styled cell-buffer renderer with cursor control
-- `zig/src/input.zig`: buffered decoder with Kitty keyboard, paste, focus, and SGR mouse
+- `zig/src/input.zig`: buffered decoder with Kitty keyboard, OSC52 clipboard replies, paste, focus, and SGR mouse
 - `zig/src/components`: current widget/app-kit surface
-- `zig/src/wasm_showcase.zig` and `zig/web`: browser host bridge and DOM renderer
+- `zig/src/wasm_showcase.zig` and `zig/web`: browser host bridge and DOM renderer with shared pointer routing and clipboard effects
 
 ## Constraints
 

@@ -125,6 +125,8 @@ pub export fn bt_focus_region(region_code: u8) bool {
 }
 
 /// Invokes one browser-tagged showcase action directly from the web host.
+/// This is now a compatibility hook; `bt_send_mouse` is the primary browser
+/// interaction path.
 pub export fn bt_send_action(action_code: u8, value: u16) bool {
     const action = decodeAction(action_code) orelse return false;
     const p = getProgram() orelse return false;
@@ -161,7 +163,7 @@ pub export fn bt_send_mouse(button_code: u8, action_code: u8, x: u16, y: u16, mo
         },
     } }) catch return false;
     _ = p.drain() catch return false;
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Advances timer state by a browser-provided delta.
@@ -195,6 +197,40 @@ pub export fn bt_tree_ptr() [*]const u8 {
 pub export fn bt_tree_len() usize {
     if (!refreshTreeBuffer()) return 0;
     return tree_buffer.items.len;
+}
+
+/// Returns the current pending clipboard effect kind.
+/// 0 none, 1 write, 2 read.
+pub export fn bt_clipboard_effect_kind() u8 {
+    const p = getProgram() orelse return 0;
+    return switch (p.clipboardEffect() orelse return 0) {
+        .write => 1,
+        .read => 2,
+    };
+}
+
+/// Returns the start pointer for the pending clipboard write payload.
+pub export fn bt_clipboard_ptr() [*]const u8 {
+    const p = getProgram() orelse return @ptrCast(&empty_byte);
+    return switch (p.clipboardEffect() orelse return @ptrCast(&empty_byte)) {
+        .write => |text| if (text.len == 0) @ptrCast(&empty_byte) else text.ptr,
+        .read => @ptrCast(&empty_byte),
+    };
+}
+
+/// Returns the byte length of the pending clipboard write payload.
+pub export fn bt_clipboard_len() usize {
+    const p = getProgram() orelse return 0;
+    return switch (p.clipboardEffect() orelse return 0) {
+        .write => |text| text.len,
+        .read => 0,
+    };
+}
+
+/// Clears the current clipboard effect after the host consumes it.
+pub export fn bt_clear_clipboard_effect() void {
+    const p = getProgram() orelse return;
+    p.clearClipboardEffect();
 }
 
 // Returns the initialized runtime. Browser hosts must call `bt_init()` first
@@ -232,6 +268,8 @@ fn refreshBuffers() bool {
 fn decodeKey(code: u32) tea.Key {
     return switch (code) {
         3 => tea.Key.ctrl_c,
+        18 => tea.Key.ctrl_r,
+        25 => tea.Key.ctrl_y,
         26 => tea.Key.ctrl_z,
         1001 => tea.Key.up,
         1002 => tea.Key.down,

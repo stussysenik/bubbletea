@@ -18,6 +18,11 @@ The rewrite SHALL treat paste-style text insertion as a first-class input path a
 - **THEN** the runtime delivers that text through a semantic paste path
 - **AND** widgets do not need to infer paste from raw key streams
 
+#### Scenario: Clipboard reads and writes stay at the host boundary
+- **WHEN** an application requests clipboard read or write behavior
+- **THEN** the runtime models that work as host-facing clipboard effects instead of widget-specific protocol handling
+- **AND** resolved clipboard text re-enters the model through the same semantic paste path
+
 ### Requirement: Pointer and Focus Normalization
 The rewrite SHALL normalize pointer and focus events so interaction routing can rely on one shared event model.
 
@@ -25,3 +30,8 @@ The rewrite SHALL normalize pointer and focus events so interaction routing can 
 - **WHEN** pointer or focus events are emitted by any supported host
 - **THEN** the runtime exposes shared focus and pointer semantics
 - **AND** higher-level widgets consume them without protocol-specific parsing
+
+#### Scenario: Pointer routing resolves through shared layout metadata
+- **WHEN** a host emits pointer coordinates against a composed model tree
+- **THEN** interaction routing resolves regions and actions through shared layout metadata
+- **AND** terminal and browser hosts do not maintain separate per-widget hit maps

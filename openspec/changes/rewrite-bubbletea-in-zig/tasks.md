@@ -12,9 +12,9 @@
 
 ## 3. Event and Input Completion
 
-- [ ] 3.1 Add clipboard integration to the terminal host and normalize clipboard-style flows
-- [ ] 3.2 Add layout-aware terminal mouse routing on top of the shared layout metadata
-- [ ] 3.3 Align browser, terminal, and headless event semantics for keys, focus, paste, and pointer actions
+- [x] 3.1 Add clipboard integration to the terminal host and normalize clipboard-style flows
+- [x] 3.2 Add layout-aware terminal mouse routing on top of the shared layout metadata
+- [x] 3.3 Align browser, terminal, and headless event semantics for keys, focus, paste, and pointer actions
 
 ## 4. Layout and Rendering Correctness
 

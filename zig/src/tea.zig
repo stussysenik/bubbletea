@@ -55,6 +55,8 @@ pub fn Cmd(comptime Msg: type) type {
     return union(enum) {
         none,
         emit: Msg,
+        clipboard_write: []const u8,
+        clipboard_read,
         tick: struct {
             delay_ns: u64,
             message: Msg,
@@ -99,6 +101,18 @@ pub fn tickAfter(comptime Msg: type, delay_ns: u64, message: Msg) Cmd(Msg) {
             .message = message,
         },
     };
+}
+
+/// Convenience wrapper for asking the active host to write UTF-8 text to its
+/// clipboard integration point.
+pub fn copyToClipboard(comptime Msg: type, text: []const u8) Cmd(Msg) {
+    return .{ .clipboard_write = text };
+}
+
+/// Convenience wrapper for requesting clipboard text from the active host.
+/// Hosts deliver the result back through the existing semantic `.paste` path.
+pub fn readClipboard(comptime Msg: type) Cmd(Msg) {
+    return .clipboard_read;
 }
 
 // Compact queue used for both pending messages and deterministic scheduling.
@@ -346,6 +360,8 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             switch (command) {
                 .none => {},
                 .emit => |msg| try self.pending.push(self.allocator, msg),
+                .clipboard_write => |text| try self.terminal.writeClipboard(text),
+                .clipboard_read => try self.terminal.requestClipboard(),
                 .tick => |tick| try self.scheduled.append(self.allocator, .{
                     .deadline_ns = nowNs() + tick.delay_ns,
                     .msg = tick.message,

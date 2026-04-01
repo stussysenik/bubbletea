@@ -80,12 +80,19 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
         quit,
     };
 
+    const ClipboardEffect = union(enum) {
+        write: []const u8,
+        read,
+    };
+
     return struct {
         allocator: std.mem.Allocator,
         model: ModelType,
         pending: Queue(Msg) = .{},
         scheduled: std.ArrayList(ScheduledMessage) = .empty,
         frame_buffer: std.ArrayList(u8) = .empty,
+        clipboard_buffer: std.ArrayList(u8) = .empty,
+        clipboard_effect: ?ClipboardEffect = null,
         dirty: bool = true,
         initialized: bool = false,
         quit_requested: bool = false,
@@ -95,6 +102,7 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
 
         const Self = @This();
         pub const StepStatus = Step;
+        pub const PendingClipboardEffect = ClipboardEffect;
         pub const Options = struct {
             /// Headless hosts still inject one initial resize so models can
             /// share the same first-update contract as terminal and WASM
@@ -122,6 +130,7 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             self.pending.deinit(self.allocator);
             self.scheduled.deinit(self.allocator);
             self.frame_buffer.deinit(self.allocator);
+            self.clipboard_buffer.deinit(self.allocator);
         }
 
         /// Runs model init exactly once, mirroring the interactive runtime.
@@ -207,6 +216,42 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             return self.frame_buffer.items;
         }
 
+        /// Returns the pending clipboard write requested by the model, if any.
+        pub fn clipboardEffect(self: *Self) ?PendingClipboardEffect {
+            return switch (self.clipboard_effect orelse return null) {
+                .write => .{ .write = self.clipboard_buffer.items },
+                .read => .read,
+            };
+        }
+
+        /// Returns the pending clipboard write requested by the model, if any.
+        pub fn clipboardText(self: *Self) ?[]const u8 {
+            return switch (self.clipboardEffect() orelse return null) {
+                .write => |text| text,
+                .read => null,
+            };
+        }
+
+        /// Clears the pending clipboard write after a host adapter consumes it.
+        pub fn clearClipboardEffect(self: *Self) void {
+            self.clipboard_buffer.clearRetainingCapacity();
+            self.clipboard_effect = null;
+        }
+
+        /// Fulfills one clipboard-read effect and routes the resulting text
+        /// back through the shared semantic paste path.
+        pub fn fulfillClipboardRead(self: *Self, text: []const u8) !void {
+            switch (self.clipboard_effect orelse return error.NoClipboardReadPending) {
+                .read => {},
+                .write => return error.NoClipboardReadPending,
+            }
+
+            self.clipboard_buffer.clearRetainingCapacity();
+            try self.clipboard_buffer.appendSlice(self.allocator, text);
+            self.clipboard_effect = null;
+            try self.pending.push(self.allocator, .{ .paste = self.clipboard_buffer.items });
+        }
+
         /// Returns the semantic cursor from the current cached frame.
         pub fn cursor(self: *Self) !?ui.Cursor {
             try self.ensureFrame();
@@ -258,6 +303,12 @@ pub fn HeadlessProgram(comptime ModelType: type, comptime UserMsg: type) type {
             switch (command) {
                 .none => {},
                 .emit => |msg| try self.pending.push(self.allocator, msg),
+                .clipboard_write => |text| {
+                    self.clipboard_buffer.clearRetainingCapacity();
+                    try self.clipboard_buffer.appendSlice(self.allocator, text);
+                    self.clipboard_effect = .{ .write = "" };
+                },
+                .clipboard_read => self.clipboard_effect = .read,
                 .tick => |tick| try self.scheduled.append(self.allocator, .{
                     .deadline_ns = self.now_ns + tick.delay_ns,
                     .msg = tick.message,
@@ -406,4 +457,65 @@ test "headless runtime stays stable after quit" {
     const snapshot = try program.snapshot(std.testing.allocator);
     defer std.testing.allocator.free(snapshot);
     try std.testing.expectEqualStrings("updates=1", snapshot);
+}
+
+test "headless runtime captures clipboard commands" {
+    const Msg = tea.Message(void);
+
+    const Model = struct {
+        pub fn init(_: *@This()) ?tea.Cmd(Msg) {
+            return tea.copyToClipboard(Msg, "zig build run");
+        }
+
+        pub fn update(_: *@This(), _: Msg) !tea.Update(Msg) {
+            return tea.Update(Msg).quitNow();
+        }
+
+        pub fn view(_: *const @This(), writer: anytype) !void {
+            try writer.writeAll("clipboard");
+        }
+    };
+
+    var program = HeadlessProgram(Model, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expectEqualStrings("zig build run", program.clipboardText().?);
+    program.clearClipboardEffect();
+    try std.testing.expectEqual(@as(?[]const u8, null), program.clipboardText());
+}
+
+test "headless runtime fulfills clipboard reads through paste" {
+    const Msg = tea.Message(void);
+
+    const Model = struct {
+        value: []const u8 = "",
+
+        pub fn init(_: *@This()) ?tea.Cmd(Msg) {
+            return tea.readClipboard(Msg);
+        }
+
+        pub fn update(self: *@This(), msg: Msg) !tea.Update(Msg) {
+            return switch (msg) {
+                .paste => |text| blk: {
+                    self.value = text;
+                    break :blk tea.Update(Msg).quitNow();
+                },
+                else => tea.Update(Msg).noop(),
+            };
+        }
+
+        pub fn view(self: *const @This(), writer: anytype) !void {
+            try writer.writeAll(self.value);
+        }
+    };
+
+    var program = HeadlessProgram(Model, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.clipboardEffect().? == .read);
+    try program.fulfillClipboardRead("from clipboard");
+    try std.testing.expect(try program.drain());
+    try std.testing.expectEqualStrings("from clipboard", program.model.value);
 }

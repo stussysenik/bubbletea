@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, OSC52 clipboard flows, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, shared layout-aware hit testing, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, direct form-field targeting, and clipboard effect bridging from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -63,18 +63,18 @@
     },
     {
       "name": "Advanced terminal input",
-      "status": "in_progress",
-      "details": "The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, Kitty keyboard mode, bracketed paste, focus reporting, and SGR mouse; clipboard integration and layout-aware hit testing are still ahead."
+      "status": "done",
+      "details": "The decoder and terminal host now handle buffered reads, split UTF-8, CSI navigation, Kitty keyboard mode, bracketed paste, focus reporting, SGR mouse, OSC52 clipboard read/write flows, and shared layout-aware hit testing for pointer routing."
     },
     {
       "name": "Higher-level app kit",
       "status": "in_progress",
-      "details": "Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, wheel navigation, and browser-targetable form fields landed; richer command routing and interaction primitives are the next framework layer."
+      "details": "Text input, table, form validation, inspector, menu, shared focus primitives, paste insertion, wheel navigation, browser-targetable form fields, and shared semantic mouse routing landed; richer command routing and interaction primitives are the next framework layer."
     },
     {
       "name": "Browser renderer",
       "status": "in_progress",
-      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, can focus interactive showcase regions from browser hit testing, and can invoke list/menu item actions plus direct form-field focus while keeping the raw text frame available for debugging; richer per-widget web rendering is still ahead."
+      "details": "A static web host now boots the WASM showcase, maps browser key/paste/focus/mouse/resize events into the shared runtime, consumes structured UI snapshots with measured grid bounds for DOM rendering, renders semantic cursor nodes, routes pointer actions through the same shared hit-testing path used by terminal hosts, drains clipboard effects, and keeps the raw text frame available for debugging; richer per-widget web rendering is still ahead."
     }
   ],
   "layers": [
@@ -92,14 +92,14 @@
     },
     {
       "name": "Input Protocols",
-      "status": "in_progress",
+      "status": "done",
       "paths": [
         "zig/src/input.zig",
         "zig/src/tea.zig",
         "zig/src/renderer.zig"
       ],
-      "shipped": "The decoder now understands buffered UTF-8, CSI navigation, Kitty keyboard CSI-u events, bracketed paste, focus reporting, and SGR mouse events, and the terminal renderer enables Kitty keyboard mode on startup.",
-      "next": "Add clipboard hooks and layout-aware mouse routing so higher-level widgets stop guessing about host input."
+      "shipped": "The decoder now understands buffered UTF-8, CSI navigation, Kitty keyboard CSI-u events, bracketed paste, focus reporting, SGR mouse events, and OSC52 clipboard replies; the runtime exposes clipboard read/write effects, and hosts route pointer actions through shared layout metadata instead of widget-specific hit maps.",
+      "next": "Extend the normalized event surface into deeper field-level targeting, richer cursor placement, and additional host effects without splintering browser and terminal semantics."
     },
     {
       "name": "View Tree and Layout",
@@ -108,8 +108,8 @@
         "zig/src/ui.zig",
         "zig/src/cell_width.zig"
       ],
-      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, semantic cursor nodes, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, keeps semantic cursors zero-width in authoritative snapshots, tags interactive regions and item actions for browser hosts, and shares terminal-cell width logic for layout-sensitive text.",
-      "next": "Push the same metadata deeper into field-level interactions and richer layout metadata so hit testing, scrolling regions, and cross-host renderers can share more than terminal-sized boxes."
+      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, semantic cursor nodes, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, keeps semantic cursors zero-width in authoritative snapshots, tags interactive regions and item actions, supports shared region/action lookup plus hit testing, and shares terminal-cell width logic for layout-sensitive text.",
+      "next": "Push the same metadata deeper into field-level interactions and richer layout metadata so cursor placement, scrolling regions, and cross-host renderers can share more than terminal-sized boxes."
     },
     {
       "name": "Renderer",
@@ -130,8 +130,8 @@
         "zig/src/focus.zig",
         "zig/src/apps/showcase.zig"
       ],
-      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, shared focus handling, and browser-targetable list/menu/form-field actions.",
-      "next": "Add richer tables, command routing, and layout-aware interaction primitives such as cursor placement and terminal hit routing so this feels like a real framework instead of a demo set."
+      "shipped": "The rewrite has a native component surface for badges, inspectors, menus, spinners, lists, progress bars, text inputs, tables, forms, validation rules, shared focus handling, semantic clipboard actions, and shared list/menu/form-field targeting across browser and terminal flows.",
+      "next": "Add richer tables, command routing, and layout-aware interaction primitives such as cursor placement so this feels like a real framework instead of a demo set."
     },
     {
       "name": "WASM and Browser Host",
@@ -143,8 +143,8 @@
         "zig/build.zig",
         "zig/web"
       ],
-      "shipped": "The core now compiles to WASM, boots through a static browser shell, requires explicit `bt_init`, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes as the primary browser contract, and keeps the raw text frame as debugging output.",
-      "next": "Push region-aware hit testing deeper into cursor placement and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
+      "shipped": "The core now compiles to WASM, boots through a static browser shell, requires explicit `bt_init`, accepts browser-driven resize, key, paste, focus, mouse, clipboard, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes as the primary browser contract, routes pointer actions through shared Zig-side hit testing, and keeps the raw text frame as debugging output.",
+      "next": "Push shared hit testing deeper into cursor placement and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
     },
     {
       "name": "Release and Repo Automation",
@@ -190,10 +190,11 @@
     }
   ],
   "next": [
-    "Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.",
     "Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.",
+    "Add explicit invalidation and repaint expectations so partial frame updates stay correct as the renderer grows beyond the showcase.",
+    "Push shared hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.",
     "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the newly documented public app-kit surface.",
-    "Push region-aware hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.",
+    "Separate stable reusable widgets from showcase-only composition code so the package boundary keeps getting tighter as features land.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]
 }

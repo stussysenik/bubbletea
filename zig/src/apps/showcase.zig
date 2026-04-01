@@ -93,6 +93,7 @@ pub fn App(comptime Msg: type) type {
         visible_len: usize = 0,
         size: tea.Size = .{},
         terminal_focused: bool = true,
+        clipboard_notice: []const u8 = "clipboard: idle",
 
         const Self = @This();
 
@@ -110,6 +111,14 @@ pub fn App(comptime Msg: type) type {
                 .key => |key| {
                     if (key.isCode(.ctrl_c)) return tea.Update(Msg).quitNow();
                     if (key.isCharacter('q')) return tea.Update(Msg).quitNow();
+                    if (key.isCode(.ctrl_r)) {
+                        self.clipboard_notice = "clipboard: requested paste";
+                        return tea.Update(Msg).withCommand(tea.readClipboard(Msg));
+                    }
+                    if (key.isCode(.ctrl_y)) {
+                        self.clipboard_notice = "clipboard: copied command";
+                        return tea.Update(Msg).withCommand(tea.copyToClipboard(Msg, self.commandForClipboard()));
+                    }
 
                     if (key.isCode(.page_up) or key.isCode(.page_down)) {
                         if (self.focus.update(key)) {
@@ -184,10 +193,7 @@ pub fn App(comptime Msg: type) type {
                     return .{};
                 },
                 .mouse => |mouse| {
-                    if ((self.focus.current() orelse zone_filter) == zone_list and self.list.updateMouse(mouse)) {
-                        return .{};
-                    }
-                    if ((self.focus.current() orelse zone_filter) == zone_menu and self.scaffold_menu.updateMouse(mouse)) {
+                    if (try self.handleMouse(mouse)) {
                         return .{};
                     }
                     return tea.Update(Msg).noop();
@@ -242,9 +248,10 @@ pub fn App(comptime Msg: type) type {
                 if (self.terminal_focused) "tty: focused" else "tty: blurred",
                 .{ .tone = if (self.terminal_focused) .success else .warning },
             );
+            const clipboard_label = try tree.textStyled(self.clipboard_notice, .{ .tone = .muted });
             const status_rule = try tree.rule(10, .{ .tone = .muted });
             const status = try tree.box(
-                try tree.row(&.{ spinner, status_label, status_rule, focus_label, size, host_focus }, .{ .gap = 2 }),
+                try tree.row(&.{ spinner, status_label, status_rule, focus_label, size, host_focus, clipboard_label }, .{ .gap = 2 }),
                 .{
                     .title = "Runtime",
                     .padding = ui.Insets.symmetric(0, 1),
@@ -368,7 +375,7 @@ pub fn App(comptime Msg: type) type {
 
             const controls = try tree.box(
                 try tree.textStyled(
-                    "page-up/page-down switch panels, enter applies a scaffold preset, paste goes into focused inputs, q quits",
+                    "page-up/page-down switches panels, enter applies a scaffold preset, ctrl+y copies the current command, ctrl+r requests clipboard paste, q quits",
                     .{ .tone = .muted },
                 ),
                 .{
@@ -425,28 +432,89 @@ pub fn App(comptime Msg: type) type {
             self.draft.field(2).setValue(selectedPresetTarget(self.scaffold_menu.selected)) catch unreachable;
         }
 
+        // Returns the command text currently worth copying across hosts.
+        fn commandForClipboard(self: *const Self) []const u8 {
+            return displayValue(self.draft.valueById("command"), selectedPresetCommand(self.scaffold_menu.selected));
+        }
+
+        // Routes raw pointer input through shared layout hit testing so
+        // terminal, headless, and browser hosts can share one semantic path.
+        fn handleMouse(self: *Self, mouse: tea.MouseEvent) !bool {
+            const hit = try ui.hitTestModel(Self, std.heap.page_allocator, self, mouse.x, mouse.y) orelse return false;
+
+            switch (mouse.action) {
+                .scroll => {
+                    if (hit.region) |region| {
+                        return self.routeScrollByRegion(region, mouse);
+                    }
+                    return false;
+                },
+                .press => {
+                    if (mouse.button != .left) return false;
+
+                    var changed = false;
+                    if (hit.region) |region| {
+                        changed = self.focusRegionByName(region) or changed;
+                    }
+                    if (hit.action) |action| {
+                        changed = self.triggerActionByName(action.kind, action.value) or changed;
+                    }
+                    return changed;
+                },
+                else => return false,
+            }
+        }
+
         /// Lets browser hosts jump focus directly to a known interactive
         /// region instead of replaying key navigation.
         pub fn focusBrowserRegion(self: *Self, region: BrowserRegion) bool {
-            const zone = switch (region) {
-                .filter => zone_filter,
-                .list => zone_list,
-                .menu => zone_menu,
-                .form => zone_form,
-            };
+            return self.focusRegionByName(@tagName(region));
+        }
+
+        /// Handles one browser-originated item action against the showcase.
+        pub fn triggerBrowserAction(self: *Self, action: BrowserAction, value: usize) bool {
+            return self.triggerActionByName(@tagName(action), value);
+        }
+
+        // Focuses one known semantic region by its structured metadata id.
+        fn focusRegionByName(self: *Self, region: []const u8) bool {
+            const zone = if (std.mem.eql(u8, region, filterRegionName()))
+                zone_filter
+            else if (std.mem.eql(u8, region, listRegionName()))
+                zone_list
+            else if (std.mem.eql(u8, region, menuRegionName()))
+                zone_menu
+            else if (std.mem.eql(u8, region, formRegionName()))
+                zone_form
+            else
+                return false;
 
             const changed = self.focus.focus(zone);
             if (changed) self.syncFocus();
             return changed;
         }
 
-        /// Handles one browser-originated item action against the showcase.
-        pub fn triggerBrowserAction(self: *Self, action: BrowserAction, value: usize) bool {
-            return switch (action) {
-                .list_item => self.selectVisibleRow(value),
-                .menu_item => self.activatePresetFromBrowser(value),
-                .form_field => self.focusFormFieldFromBrowser(value),
-            };
+        // Routes one semantic action target emitted by shared hit metadata.
+        fn triggerActionByName(self: *Self, kind: []const u8, value: usize) bool {
+            if (std.mem.eql(u8, kind, listActionName())) return self.selectVisibleRow(value);
+            if (std.mem.eql(u8, kind, menuActionName())) return self.activatePresetFromBrowser(value);
+            if (std.mem.eql(u8, kind, formFieldActionName())) return self.focusFormFieldFromBrowser(value);
+            return false;
+        }
+
+        // Applies wheel-style scrolling based on the hovered semantic region.
+        fn routeScrollByRegion(self: *Self, region: []const u8, mouse: tea.MouseEvent) bool {
+            if (std.mem.eql(u8, region, listRegionName())) {
+                const changed = self.list.updateMouse(mouse);
+                const focused = self.focusRegionByName(region);
+                return changed or focused;
+            }
+            if (std.mem.eql(u8, region, menuRegionName())) {
+                const changed = self.scaffold_menu.updateMouse(mouse);
+                const focused = self.focusRegionByName(region);
+                return changed or focused;
+            }
+            return self.focusRegionByName(region);
         }
 
         // Selects a visible roadmap row and moves focus into the list panel.
@@ -780,6 +848,81 @@ test "showcase browser actions can focus individual form fields" {
     try std.testing.expect(program.model.focus.isFocused(zone_form));
     try std.testing.expect(program.model.draft.focus.isFocused(1));
     try std.testing.expect(program.model.draft.active);
+}
+
+test "showcase mouse press uses shared hit testing for list actions" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    const frame = (try ui.findActionModel(ShowcaseApp, std.testing.allocator, &program.model, listActionName(), 1)).?;
+    try program.send(.{ .mouse = .{
+        .x = @intCast(frame.x),
+        .y = @intCast(frame.y),
+        .button = .left,
+        .action = .press,
+    } });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.focus.isFocused(zone_list));
+    try std.testing.expectEqual(@as(usize, 1), program.model.list.selected);
+}
+
+test "showcase mouse press uses shared hit testing for menu actions" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    const frame = (try ui.findActionModel(ShowcaseApp, std.testing.allocator, &program.model, menuActionName(), 1)).?;
+    try program.send(.{ .mouse = .{
+        .x = @intCast(frame.x),
+        .y = @intCast(frame.y),
+        .button = .left,
+        .action = .press,
+    } });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.model.focus.isFocused(zone_form));
+    try std.testing.expectEqualStrings("bubbletea-zig-unified", program.model.draft.valueById("name").?);
+}
+
+test "showcase ctrl+y copies the current command" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try program.send(.{ .key = tea.Key.page_down });
+    try program.send(.{ .key = tea.Key.page_down });
+    try std.testing.expect(!(try program.drain()));
+    try program.send(.{ .key = tea.Key.down });
+    try program.send(.{ .key = tea.Key.enter });
+    try std.testing.expect(!(try program.drain()));
+    try program.send(.{ .key = tea.Key.ctrl_y });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expectEqualStrings("zig build run && zig build wasm", program.clipboardText().?);
+}
+
+test "showcase ctrl+r requests clipboard paste into the focused field" {
+    const Msg = tea.Message(void);
+    const ShowcaseApp = App(Msg);
+
+    var program = HeadlessProgram(ShowcaseApp, void).init(std.testing.allocator, .{});
+    defer program.deinit();
+
+    try std.testing.expect(!(try program.drain()));
+    try program.send(.{ .key = tea.Key.ctrl_r });
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expect(program.clipboardEffect().? == .read);
+    try program.fulfillClipboardRead("from clipboard");
+    try std.testing.expect(!(try program.drain()));
+    try std.testing.expectEqualStrings("from clipboard", program.model.filter.value());
 }
 
 test "showcase menu applies scaffold presets" {

@@ -52,6 +52,26 @@ pub const Terminal = struct {
         return std.posix.read(self.stdin.handle, buffer);
     }
 
+    /// Writes an OSC 52 clipboard update when stdout is a TTY.
+    pub fn writeClipboard(self: *const Terminal, text: []const u8) !void {
+        if (!self.stdout.isTty()) return;
+
+        var buffer: std.ArrayList(u8) = .empty;
+        defer buffer.deinit(std.heap.page_allocator);
+
+        try appendOsc52Clipboard(&buffer, std.heap.page_allocator, text);
+        try self.stdout.writeAll(buffer.items);
+    }
+
+    /// Requests clipboard text from OSC 52 capable terminals.
+    pub fn requestClipboard(self: *const Terminal) !void {
+        if (!self.stdout.isTty()) return;
+
+        var buffer: [9]u8 = undefined;
+        const sequence = osc52ClipboardQuery(&buffer);
+        try self.stdout.writeAll(sequence);
+    }
+
     /// Blocks until input is available or the timeout expires.
     pub fn pollInput(self: *const Terminal, timeout_ms: i32) !bool {
         var pollfds = [_]std.posix.pollfd{.{
@@ -94,3 +114,31 @@ pub const Terminal = struct {
         };
     }
 };
+
+// Encodes one OSC 52 clipboard write sequence for terminals that support it.
+fn appendOsc52Clipboard(buffer: *std.ArrayList(u8), allocator: std.mem.Allocator, text: []const u8) !void {
+    try buffer.appendSlice(allocator, "\x1b]52;c;");
+    const encoded_len = std.base64.standard.Encoder.calcSize(text.len);
+    const encoded = try buffer.addManyAsSlice(allocator, encoded_len);
+    _ = std.base64.standard.Encoder.encode(encoded, text);
+    try buffer.append(allocator, 0x07);
+}
+
+// Produces an OSC 52 clipboard query using BEL termination.
+fn osc52ClipboardQuery(buffer: *[9]u8) []const u8 {
+    @memcpy(buffer, "\x1b]52;c;?\x07");
+    return buffer;
+}
+
+test "osc52 clipboard sequence encodes utf8 text" {
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try appendOsc52Clipboard(&buffer, std.testing.allocator, "zig tea");
+    try std.testing.expectEqualStrings("\x1b]52;c;emlnIHRlYQ==\x07", buffer.items);
+}
+
+test "osc52 clipboard query is emitted with bel terminator" {
+    var buffer: [9]u8 = undefined;
+    try std.testing.expectEqualStrings("\x1b]52;c;?\x07", osc52ClipboardQuery(&buffer));
+}

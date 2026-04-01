@@ -2,8 +2,8 @@
 //!
 //! Stability:
 //! - Recommended app-kit surface: `Program`, `HeadlessProgram`, `Message`,
-//!   `Cmd`, `Update`, `emit`, `tickAfter`, `FocusRing`, `ui`, `components`,
-//!   and `contract`.
+//!   `Cmd`, `Update`, `emit`, `tickAfter`, `copyToClipboard`,
+//!   `readClipboard`, `FocusRing`, `ui`, `components`, and `contract`.
 //! - Advanced host/runtime surface: `input`, `InputDecoder`, `InputEvent`,
 //!   `renderer`, and `terminal`.
 //! - Example-only surface: `apps.showcase`.
@@ -48,6 +48,8 @@ pub const Cmd = tea.Cmd;
 pub const Update = tea.Update;
 pub const emit = tea.emit;
 pub const tickAfter = tea.tickAfter;
+pub const copyToClipboard = tea.copyToClipboard;
+pub const readClipboard = tea.readClipboard;
 pub const Program = tea.Program;
 
 /// Reusable UI widgets built on top of the shared view tree.

@@ -56,6 +56,8 @@ pub const Key = struct {
         shift_tab,
         insert,
         ctrl_c,
+        ctrl_r,
+        ctrl_y,
         ctrl_z,
         unknown,
     };
@@ -76,6 +78,8 @@ pub const Key = struct {
     pub const shift_tab: Key = .{ .code = .shift_tab };
     pub const insert: Key = .{ .code = .insert };
     pub const ctrl_c: Key = .{ .code = .ctrl_c };
+    pub const ctrl_r: Key = .{ .code = .ctrl_r };
+    pub const ctrl_y: Key = .{ .code = .ctrl_y };
     pub const ctrl_z: Key = .{ .code = .ctrl_z };
 
     /// Creates a plain Unicode keypress.
@@ -171,6 +175,8 @@ pub const Key = struct {
             .shift_tab => writer.writeAll("shift+tab") catch return "<?>",
             .insert => writer.writeAll("insert") catch return "<?>",
             .ctrl_c => writer.writeAll("ctrl+c") catch return "<?>",
+            .ctrl_r => writer.writeAll("ctrl+r") catch return "<?>",
+            .ctrl_y => writer.writeAll("ctrl+y") catch return "<?>",
             .ctrl_z => writer.writeAll("ctrl+z") catch return "<?>",
             .unknown => std.fmt.format(writer, "unknown({d})", .{self.raw}) catch return "<?>",
         }
@@ -235,8 +241,10 @@ pub const Event = union(enum) {
 pub const Decoder = struct {
     allocator: std.mem.Allocator,
     pending: std.ArrayList(u8) = .empty,
+    clipboard_buffer: std.ArrayList(u8) = .empty,
     in_paste: bool = false,
     ready_paste_len: ?usize = null,
+    ready_clipboard_consumed: ?usize = null,
 
     pub fn init(allocator: std.mem.Allocator) Decoder {
         return .{ .allocator = allocator };
@@ -245,6 +253,7 @@ pub const Decoder = struct {
     /// Releases buffered undecoded bytes.
     pub fn deinit(self: *Decoder) void {
         self.pending.deinit(self.allocator);
+        self.clipboard_buffer.deinit(self.allocator);
     }
 
     /// Appends raw terminal bytes to the decoder buffer.
@@ -257,8 +266,15 @@ pub const Decoder = struct {
     /// Paste payload slices remain valid until the next decoder mutation call.
     pub fn nextEvent(self: *Decoder) ?Event {
         self.finishReadyPaste();
+        self.finishReadyClipboard();
 
         while (true) {
+            switch (self.parseOscClipboard()) {
+                .event => |event| return event,
+                .pending => return null,
+                .none => {},
+            }
+
             if (self.in_paste) {
                 if (std.mem.indexOf(u8, self.pending.items, paste_end_sequence)) |index| {
                     self.in_paste = false;
@@ -288,8 +304,15 @@ pub const Decoder = struct {
     /// gone idle.
     pub fn flushEvent(self: *Decoder) ?Event {
         self.finishReadyPaste();
+        self.finishReadyClipboard();
 
         while (true) {
+            switch (self.parseOscClipboard()) {
+                .event => |event| return event,
+                .pending => return null,
+                .none => {},
+            }
+
             if (self.in_paste) {
                 if (std.mem.indexOf(u8, self.pending.items, paste_end_sequence)) |index| {
                     self.in_paste = false;
@@ -354,7 +377,7 @@ pub const Decoder = struct {
 
     /// Reports whether undecoded bytes or an open paste block are buffered.
     pub fn hasPending(self: *const Decoder) bool {
-        return self.pending.items.len != 0 or self.in_paste or self.ready_paste_len != null;
+        return self.pending.items.len != 0 or self.in_paste or self.ready_paste_len != null or self.ready_clipboard_consumed != null;
     }
 
     // Removes bytes whose paste payload was already handed to the caller.
@@ -362,6 +385,73 @@ pub const Decoder = struct {
         const payload_len = self.ready_paste_len orelse return;
         self.consume(payload_len + paste_end_sequence.len);
         self.ready_paste_len = null;
+    }
+
+    // Removes bytes whose OSC clipboard payload was already handed to the
+    // caller and clears the decoded scratch buffer.
+    fn finishReadyClipboard(self: *Decoder) void {
+        const consumed = self.ready_clipboard_consumed orelse return;
+        self.consume(consumed);
+        self.ready_clipboard_consumed = null;
+        self.clipboard_buffer.clearRetainingCapacity();
+    }
+
+    // Parses one OSC 52 clipboard reply and emits it as a semantic paste
+    // event. Invalid replies are consumed and ignored.
+    fn parseOscClipboard(self: *Decoder) union(enum) {
+        none,
+        pending,
+        event: Event,
+    } {
+        if (self.pending.items.len < 2 or self.pending.items[0] != 0x1B or self.pending.items[1] != ']') {
+            return .none;
+        }
+
+        const terminator = findOscTerminator(self.pending.items) orelse return .pending;
+        const payload = self.pending.items[2..terminator.payload_end];
+        const consumed = terminator.consumed;
+
+        var parts = std.mem.splitScalar(u8, payload, ';');
+        const command = parts.next() orelse {
+            self.consume(consumed);
+            return .none;
+        };
+        if (!std.mem.eql(u8, command, "52")) {
+            self.consume(consumed);
+            return .none;
+        }
+
+        _ = parts.next() orelse {
+            self.consume(consumed);
+            return .none;
+        };
+        const data = parts.next() orelse {
+            self.consume(consumed);
+            return .none;
+        };
+
+        if (data.len == 0 or std.mem.eql(u8, data, "?")) {
+            self.consume(consumed);
+            return .none;
+        }
+
+        const decoded_len = std.base64.standard.Decoder.calcSizeForSlice(data) catch {
+            self.consume(consumed);
+            return .none;
+        };
+        self.clipboard_buffer.clearRetainingCapacity();
+        const target = self.clipboard_buffer.addManyAsSlice(self.allocator, decoded_len) catch {
+            self.consume(consumed);
+            return .none;
+        };
+        std.base64.standard.Decoder.decode(target, data) catch {
+            self.clipboard_buffer.clearRetainingCapacity();
+            self.consume(consumed);
+            return .none;
+        };
+
+        self.ready_clipboard_consumed = consumed;
+        return .{ .event = .{ .paste = self.clipboard_buffer.items } };
     }
 
     // Removes decoded bytes while keeping the backing allocation.
@@ -417,6 +507,8 @@ fn parseOne(bytes: []const u8) DecodeState {
 
     return switch (bytes[0]) {
         0x03 => .{ .item = .{ .value = .{ .event = .{ .key = Key.ctrl_c } }, .consumed = 1 } },
+        0x12 => .{ .item = .{ .value = .{ .event = .{ .key = Key.ctrl_r } }, .consumed = 1 } },
+        0x19 => .{ .item = .{ .value = .{ .event = .{ .key = Key.ctrl_y } }, .consumed = 1 } },
         0x1A => .{ .item = .{ .value = .{ .event = .{ .key = Key.ctrl_z } }, .consumed = 1 } },
         '\r', '\n' => .{ .item = .{ .value = .{ .event = .{ .key = Key.enter } }, .consumed = 1 } },
         '\t' => .{ .item = .{ .value = .{ .event = .{ .key = Key.tab } }, .consumed = 1 } },
@@ -467,6 +559,34 @@ fn parseCsi(bytes: []const u8) DecodeState {
         '~' => parseCsiTilde(params, consumed),
         else => keyItem(Key.unknown(final), consumed),
     };
+}
+
+const OscTerminator = struct {
+    payload_end: usize,
+    consumed: usize,
+};
+
+// Finds the OSC terminator, accepting either BEL or the ST sequence.
+fn findOscTerminator(bytes: []const u8) ?OscTerminator {
+    var index: usize = 2;
+    while (index < bytes.len) : (index += 1) {
+        if (bytes[index] == 0x07) {
+            return .{
+                .payload_end = index,
+                .consumed = index + 1,
+            };
+        }
+        if (bytes[index] == 0x1B) {
+            if (index + 1 >= bytes.len) return null;
+            if (bytes[index + 1] == '\\') {
+                return .{
+                    .payload_end = index,
+                    .consumed = index + 2,
+                };
+            }
+        }
+    }
+    return null;
 }
 
 // Handles `CSI <n> ~` style navigation keys and bracketed paste markers.
@@ -859,6 +979,33 @@ test "decoder parses sgr mouse press and scroll events" {
             try std.testing.expectEqual(@as(u16, 4), mouse.x);
             try std.testing.expectEqual(@as(u16, 7), mouse.y);
         },
+        else => return error.UnexpectedEvent,
+    }
+}
+
+test "decoder emits osc52 clipboard replies as paste" {
+    var decoder = Decoder.init(std.testing.allocator);
+    defer decoder.deinit();
+
+    try decoder.feed("\x1b]52;c;emlnIGJ1YmJsZXRlYQ==\x07");
+    const event = decoder.nextEvent().?;
+    switch (event) {
+        .paste => |text| try std.testing.expectEqualStrings("zig bubbletea", text),
+        else => return error.UnexpectedEvent,
+    }
+}
+
+test "decoder accepts st-terminated osc52 replies split across feeds" {
+    var decoder = Decoder.init(std.testing.allocator);
+    defer decoder.deinit();
+
+    try decoder.feed("\x1b]52;c;emln");
+    try std.testing.expectEqual(@as(?Event, null), decoder.nextEvent());
+    try decoder.feed("IHRlYQ==\x1b\\");
+
+    const event = decoder.nextEvent().?;
+    switch (event) {
+        .paste => |text| try std.testing.expectEqualStrings("zig tea", text),
         else => return error.UnexpectedEvent,
     }
 }

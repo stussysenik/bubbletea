@@ -28,14 +28,14 @@ What is here:
 - Shared lifecycle and host capability contracts in [`src/contract.zig`](./src/contract.zig)
 - A shared focus utility in [`src/focus.zig`](./src/focus.zig)
 - A composable cross-host view tree in [`src/ui.zig`](./src/ui.zig)
-- A stateful terminal input decoder in [`src/input.zig`](./src/input.zig) that handles keys, paste, focus, and SGR mouse events
-- Raw terminal setup and size polling in [`src/terminal.zig`](./src/terminal.zig)
+- A stateful terminal input decoder in [`src/input.zig`](./src/input.zig) that handles keys, OSC52 clipboard replies, paste, focus, and SGR mouse events
+- Raw terminal setup and size polling in [`src/terminal.zig`](./src/terminal.zig), including clipboard read/write hooks
 - A styled cell-buffer ANSI renderer in [`src/renderer.zig`](./src/renderer.zig) that also enables terminal protocols such as bracketed paste and focus reporting
 - Reusable components in [`src/components`](./src/components), including inspector, menu, text input, table, and form primitives
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
-- A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with explicit init, resize, key, paste, focus, mouse, tick, and snapshot entrypoints
-- A static browser host in [`web`](./web) that drives the WASM build through a thin JavaScript bridge, consumes structured UI snapshots with measured layout bounds, supports region-aware focus targeting, and keeps the raw text frame available for debugging
+- A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with explicit init, resize, key, paste, focus, mouse, clipboard, tick, and snapshot entrypoints
+- A static browser host in [`web`](./web) that drives the WASM build through a thin JavaScript bridge, consumes structured UI snapshots with measured layout bounds, uses shared hit testing for pointer routing, drains clipboard effects, and keeps the raw text frame available for debugging
 
 ## Why this shape
 
@@ -82,6 +82,7 @@ Recommended app-kit surface:
 
 - `tea.Program`, `tea.HeadlessProgram`
 - `tea.Message`, `tea.Cmd`, `tea.Update`, `tea.emit`, `tea.tickAfter`
+- `tea.copyToClipboard`, `tea.readClipboard`
 - `tea.FocusRing`, `tea.ui`, `tea.components`
 - `tea.contract`
 
@@ -127,7 +128,7 @@ const Model = struct {
 The current prototype already avoids some obvious overhead, but these are the best next steps:
 
 1. Replace line diffing with a cell buffer so cursor movement and short edits become cheaper than whole-line clears.
-2. Keep extending the stream decoder so Kitty keyboard enhancements, clipboard hooks, and richer mouse routing stay centralized and allocation-light.
+2. Keep extending the stream decoder so richer keyboard protocols and terminal-side host effects stay centralized and allocation-light.
 3. Move timers and I/O to platform event sources (`kqueue`, `epoll`, `io_uring` later) instead of poll-plus-scan.
 4. Add a rope or segmented buffer for large views so composing components does not always flatten into one contiguous string.
 5. Expand the current view tree into a richer layout/style system so the same model tree can target terminal, web, or WASM renderers cleanly.
