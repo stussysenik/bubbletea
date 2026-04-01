@@ -13,6 +13,10 @@ const App = showcase.App(Msg);
 const Program = tea.HeadlessProgram(App, void);
 const allocator = std.heap.wasm_allocator;
 const input_capacity = 4096;
+const default_size = tea.Size{
+    .width = 80,
+    .height = 24,
+};
 
 // Global host state kept alive across JS calls.
 var program: ?Program = null;
@@ -23,23 +27,28 @@ var tree_buffer: std.ArrayList(u8) = .empty;
 // Browser hosts can copy UTF-8 text into this scratch space before calling
 // `bt_send_paste`.
 var input_buffer: [input_capacity]u8 = [_]u8{0} ** input_capacity;
+var empty_byte: u8 = 0;
 
-/// Initializes the headless showcase and produces the first frame.
+/// Initializes the headless showcase exactly once and produces the first
+/// structured/tree-backed snapshot. All other exports require `bt_init()` to
+/// succeed first.
 pub export fn bt_init() bool {
-    const first_init = program == null;
-    const p = ensureProgram() orelse return false;
-
-    if (first_init) {
-        p.send(.{
-            .resize = .{
-                .width = 80,
-                .height = 24,
-            },
-        }) catch return false;
-        _ = p.drain() catch return false;
+    if (program == null) {
+        program = Program.initWithOptions(allocator, .{}, .{
+            .initial_size = default_size,
+        });
+        const p = &program.?;
+        p.boot() catch {
+            bt_deinit();
+            return false;
+        };
+        _ = p.drain() catch {
+            bt_deinit();
+            return false;
+        };
     }
 
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Tears down the WASM-side runtime and frame buffer.
@@ -64,7 +73,7 @@ pub export fn bt_resize(width: u16, height: u16) bool {
         },
     }) catch return false;
     _ = p.drain() catch return false;
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Sends one normalized key code into the headless runtime.
@@ -72,7 +81,7 @@ pub export fn bt_send_key(code: u32) bool {
     const p = getProgram() orelse return false;
     p.send(.{ .key = decodeKey(code) }) catch return false;
     _ = p.drain() catch return false;
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Returns a writable pointer to the shared UTF-8 input scratch buffer.
@@ -94,7 +103,7 @@ pub export fn bt_send_paste(len: usize) bool {
     const p = getProgram() orelse return false;
     p.send(.{ .paste = text }) catch return false;
     _ = p.drain() catch return false;
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Reports whether the browser host is focused, mirroring terminal focus
@@ -103,7 +112,7 @@ pub export fn bt_set_focus(focused: bool) bool {
     const p = getProgram() orelse return false;
     p.send(if (focused) .focus_gained else .focus_lost) catch return false;
     _ = p.drain() catch return false;
-    return refreshRenderBuffer();
+    return refreshBuffers();
 }
 
 /// Focuses one known showcase region directly from the browser host.
@@ -162,43 +171,36 @@ pub export fn bt_tick(delta_ms: u32) bool {
     return refreshBuffers();
 }
 
-/// Returns the start pointer for the current frame buffer.
+/// Returns the start pointer for the current debug text frame buffer. The
+/// pointed-to bytes remain valid until the next successful mutating export.
 pub export fn bt_render_ptr() [*]const u8 {
-    _ = refreshRenderBuffer();
+    if (!refreshRenderBuffer()) return @ptrCast(&empty_byte);
     return render_buffer.items.ptr;
 }
 
-/// Returns the current frame length in bytes.
+/// Returns the current debug text frame length in bytes.
 pub export fn bt_render_len() usize {
-    _ = refreshRenderBuffer();
+    if (!refreshRenderBuffer()) return 0;
     return render_buffer.items.len;
 }
 
-/// Returns the start pointer for the current structured UI snapshot.
+/// Returns the start pointer for the authoritative structured UI snapshot. The
+/// pointed-to bytes remain valid until the next successful mutating export.
 pub export fn bt_tree_ptr() [*]const u8 {
-    _ = refreshTreeBuffer();
+    if (!refreshTreeBuffer()) return @ptrCast(&empty_byte);
     return tree_buffer.items.ptr;
 }
 
 /// Returns the current structured UI snapshot length in bytes.
 pub export fn bt_tree_len() usize {
-    _ = refreshTreeBuffer();
+    if (!refreshTreeBuffer()) return 0;
     return tree_buffer.items.len;
 }
 
-// Lazily boots the headless runtime on first use.
+// Returns the initialized runtime. Browser hosts must call `bt_init()` first
+// so lifecycle and buffer ownership stay explicit.
 fn getProgram() ?*Program {
-    return ensureProgram();
-}
-
-// Creates and boots the runtime exactly once, even when the browser host
-// calls into exports in different orders.
-fn ensureProgram() ?*Program {
-    if (program == null) {
-        program = Program.init(allocator, .{});
-    }
-    const p = &program.?;
-    p.boot() catch return null;
+    if (program == null) return null;
     return &program.?;
 }
 
@@ -216,7 +218,7 @@ fn refreshTreeBuffer() bool {
     const p = getProgram() orelse return false;
     tree_buffer.clearRetainingCapacity();
     const writer = tree_buffer.writer(allocator);
-    tea.ui.renderModelJson(App, allocator, &p.model, writer) catch return false;
+    p.writeTreeJson(writer) catch return false;
     return true;
 }
 

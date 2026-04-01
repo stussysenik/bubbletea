@@ -128,8 +128,13 @@ pub const Renderer = struct {
         self.started = false;
     }
 
-    /// Writes either the whole frame or a row-level diff depending on host
-    /// capabilities.
+    /// Renders one already-composed frame plus semantic cursor metadata.
+    pub fn renderFrame(self: *Renderer, frame: Frame) !void {
+        try self.render(frame.bytes, frame.cursor);
+    }
+
+    /// Writes one already-composed frame, either as plain bytes for non-TTY
+    /// hosts or as a terminal diff for ANSI-capable hosts.
     pub fn render(self: *Renderer, frame: []const u8, cursor: ?Cursor) !void {
         if (!self.options.ansi_enabled) {
             if (std.mem.eql(u8, self.previous_frame.items, frame)) return;
@@ -635,3 +640,10 @@ test "cursor state hides the terminal cursor when absent" {
     try std.testing.expect(!visible);
     try std.testing.expectEqualStrings("\x1b[?25l", output.items);
 }
+    /// Already-composed frame bytes plus any semantic cursor position from the
+    /// shared UI tree. Layout measurement happens upstream in `ui.zig`; the
+    /// renderer only diffs terminal output.
+    pub const Frame = struct {
+        bytes: []const u8,
+        cursor: ?Cursor,
+    };

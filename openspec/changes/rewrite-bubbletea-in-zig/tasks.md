@@ -6,9 +6,9 @@
 
 ## 2. Baseline Contract Freeze
 
-- [ ] 2.1 Freeze the runtime lifecycle contract across interactive, headless, and WASM hosts
-- [ ] 2.2 Freeze the UI tree and renderer boundary, including semantic cursor and structured snapshot expectations
-- [ ] 2.3 Document the intended public component/app-kit surface versus internal-only APIs
+- [x] 2.1 Freeze the runtime lifecycle contract across interactive, headless, and WASM hosts
+- [x] 2.2 Freeze the UI tree and renderer boundary, including semantic cursor and structured snapshot expectations
+- [x] 2.3 Document the intended public component/app-kit surface versus internal-only APIs
 
 ## 3. Event and Input Completion
 

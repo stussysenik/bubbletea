@@ -9,7 +9,8 @@ pub const Menu = struct {
     active: bool = true,
     empty_label: []const u8 = "(no menu items)",
 
-    /// Optional composition-time metadata for browser-targetable menu rows.
+    /// Optional host-integration metadata for callers that want direct item
+    /// targeting from a structured host such as the browser adapter.
     pub const ComposeOptions = struct {
         action_kind: ?[]const u8 = null,
     };
@@ -113,8 +114,8 @@ pub const Menu = struct {
         return self.composeWithOptions(tree, .{});
     }
 
-    /// Composes the menu and optionally tags each item with browser action
-    /// metadata.
+    /// Composes the menu and optionally tags each item with structured-host
+    /// action metadata. Most callers should use `compose()`.
     pub fn composeWithOptions(self: *const Menu, tree: *ui.Tree, options: ComposeOptions) !ui.NodeId {
         if (self.items.len == 0) {
             return tree.textStyled(self.empty_label, .{ .tone = .muted });
@@ -222,4 +223,21 @@ test "menu can compose browser action metadata" {
     try tree.writeJson(buffer.writer(std.testing.allocator), root);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"menu_item\",\"value\":0}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"menu_item\",\"value\":1}") != null);
+}
+
+test "menu compose stays host-agnostic by default" {
+    const items = [_]Menu.Item{
+        .{ .label = "CLI", .detail = "single-binary terminal app" },
+    };
+
+    var tree = ui.Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const menu = Menu.init(&items);
+    const root = try menu.compose(&tree);
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try tree.writeJson(buffer.writer(std.testing.allocator), root);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":") == null);
 }

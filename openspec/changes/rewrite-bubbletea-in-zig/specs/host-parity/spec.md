@@ -25,3 +25,8 @@ The browser adapter SHALL consume structured tree output instead of inferring be
 - **WHEN** the browser host renders a model
 - **THEN** it uses structured snapshot metadata from the Zig runtime
 - **AND** raw frame text remains optional debugging output rather than the primary interaction source
+
+#### Scenario: Browser host validates the structured snapshot contract
+- **WHEN** the browser host receives malformed or unknown snapshot data
+- **THEN** it fails fast instead of silently inventing fallback DOM behavior
+- **AND** interaction targeting continues to rely only on structured node metadata

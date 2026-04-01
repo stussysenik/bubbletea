@@ -8,7 +8,8 @@ pub const List = struct {
     selected: usize = 0,
     empty_label: []const u8 = "(no results)",
 
-    /// Optional composition-time metadata for browser-targetable list rows.
+    /// Optional host-integration metadata for callers that want direct row
+    /// targeting from a structured host such as the browser adapter.
     pub const ComposeOptions = struct {
         action_kind: ?[]const u8 = null,
     };
@@ -102,8 +103,8 @@ pub const List = struct {
         return self.composeWithOptions(tree, .{});
     }
 
-    /// Composes the list and optionally tags each row with browser action
-    /// metadata.
+    /// Composes the list and optionally tags each row with structured-host
+    /// action metadata. Most callers should use `compose()`.
     pub fn composeWithOptions(self: *const List, tree: *ui.Tree, options: ComposeOptions) !ui.NodeId {
         if (self.items.len == 0) {
             return tree.textStyled(self.empty_label, .{ .tone = .muted });
@@ -184,4 +185,19 @@ test "list can compose browser action metadata" {
     try tree.writeJson(buffer.writer(std.testing.allocator), root);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"list_item\",\"value\":0}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"list_item\",\"value\":1}") != null);
+}
+
+test "list compose stays host-agnostic by default" {
+    const items = [_][]const u8{ "one", "two" };
+    const list = List.init(&items);
+
+    var tree = ui.Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const root = try list.compose(&tree);
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try tree.writeJson(buffer.writer(std.testing.allocator), root);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":") == null);
 }

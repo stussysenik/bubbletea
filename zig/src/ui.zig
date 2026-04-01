@@ -91,6 +91,10 @@ pub const RuleOptions = struct {
 /// Host-facing rendering flags.
 pub const RenderOptions = struct {
     ansi: bool = true,
+    /// Plain-text hosts can opt into a visible `|` placeholder for debugging,
+    /// but the authoritative cross-host cursor contract stays semantic and
+    /// zero-width by default.
+    debug_cursor: bool = false,
 };
 
 /// Shared display-width helper used by layout-sensitive components.
@@ -100,6 +104,12 @@ pub const displayWidth = cell_width.displayWidth;
 pub const Cursor = struct {
     x: usize,
     y: usize,
+};
+
+/// Shared frame output returned by the composed UI tree.
+pub const RenderSnapshot = struct {
+    frame: []const u8,
+    cursor: ?Cursor,
 };
 
 const ChildRange = struct {
@@ -174,7 +184,7 @@ const LayoutOrigin = struct {
 };
 
 // Full frame data attached to every serialized node.
-const LayoutFrame = struct {
+pub const LayoutFrame = struct {
     x: usize,
     y: usize,
     width: usize,
@@ -308,14 +318,19 @@ pub const Tree = struct {
 
     /// Renders the tree root and reports any semantic cursor position.
     pub fn renderWithCursor(self: *Tree, writer: anytype, root: NodeId, options: RenderOptions) !?Cursor {
-        var block = try renderNode(self, root, .{ .ansi = options.ansi });
+        var block = try renderNode(self, root, .{
+            .ansi = options.ansi,
+            .debug_cursor = options.debug_cursor,
+        });
         defer block.deinit();
         try block.writeTo(writer);
         return block.cursor;
     }
 
-    /// Serializes one frame tree into a JSON structure suitable for browser
-    /// hosts that want to render real DOM nodes instead of flattened text.
+    /// Serializes one frame tree into the authoritative structured snapshot
+    /// used by browser and tooling hosts. Layout units are terminal cells,
+    /// cursor nodes stay zero-width, and `region` / `action` metadata remains
+    /// attached to the same nodes that generated the frame.
     pub fn writeJson(self: *Tree, writer: anytype, root: NodeId) !void {
         try writeNodeJson(self, writer, root);
     }
@@ -348,7 +363,22 @@ pub fn renderModel(
     frame_buffer: *std.ArrayList(u8),
     options: RenderOptions,
 ) !void {
-    _ = try renderModelWithCursor(ModelType, allocator, model, frame_buffer, options);
+    _ = try renderModelSnapshot(ModelType, allocator, model, frame_buffer, options);
+}
+
+/// Renders a model into one frame slice plus any semantic cursor metadata.
+pub fn renderModelSnapshot(
+    comptime ModelType: type,
+    allocator: std.mem.Allocator,
+    model: *const ModelType,
+    frame_buffer: *std.ArrayList(u8),
+    options: RenderOptions,
+) !RenderSnapshot {
+    const cursor = try renderModelWithCursor(ModelType, allocator, model, frame_buffer, options);
+    return .{
+        .frame = frame_buffer.items,
+        .cursor = cursor,
+    };
 }
 
 /// Renders a model and returns any semantic cursor position from the composed
@@ -860,9 +890,11 @@ const Block = struct {
     }
 };
 
-// Rendering currently only needs to know whether ANSI styling is enabled.
+// Rendering needs ANSI mode plus whether plain-text callers want a visible
+// cursor placeholder for debugging.
 const RenderContext = struct {
     ansi: bool,
+    debug_cursor: bool,
 };
 
 // Dispatches node rendering by variant.
@@ -895,12 +927,13 @@ fn renderText(allocator: std.mem.Allocator, text_node: TextNode, ctx: RenderCont
     return block;
 }
 
-// Cursor nodes render semantically: plain hosts get `|`, terminal hosts get a
-// solid block so the caret is not mistaken for model text.
+// Cursor nodes render semantically by default. Plain-text callers can opt into
+// a visible `|` placeholder for debugging, but the shared host contract keeps
+// the cursor zero-width and separate from text layout.
 fn renderCursor(allocator: std.mem.Allocator, cursor_node: CursorNode, ctx: RenderContext) std.mem.Allocator.Error!Block {
     var block = Block.init(allocator);
 
-    if (ctx.ansi) {
+    if (ctx.ansi or !ctx.debug_cursor) {
         _ = try block.appendEmptyLine();
         block.cursor = .{ .x = 0, .y = 0 };
         block.width = 0;
@@ -909,6 +942,7 @@ fn renderCursor(allocator: std.mem.Allocator, cursor_node: CursorNode, ctx: Rend
 
     var line = Line{};
     try line.appendStyledSliceWithMode(allocator, "|", cursor_node.tone, false);
+    block.cursor = .{ .x = 0, .y = 0 };
     block.width = 1;
     try block.lines.append(allocator, line);
     return block;
@@ -1215,6 +1249,49 @@ test "tree can render without ansi escapes" {
     try std.testing.expectEqualStrings("plain", buffer.items);
 }
 
+test "semantic cursor stays zero-width in plain snapshots" {
+    var tree = Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const input = try tree.row(&.{
+        try tree.text("ab"),
+        try tree.cursor(.accent),
+        try tree.text("cd"),
+    }, .{ .gap = 0 });
+
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    const cursor = try tree.renderWithCursor(buffer.writer(std.testing.allocator), input, .{
+        .ansi = false,
+    });
+
+    try std.testing.expectEqualStrings("abcd", buffer.items);
+    try std.testing.expectEqual(@as(?Cursor, .{ .x = 2, .y = 0 }), cursor);
+}
+
+test "plain debug cursor placeholder remains opt-in" {
+    var tree = Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const input = try tree.row(&.{
+        try tree.text("ab"),
+        try tree.cursor(.accent),
+        try tree.text("cd"),
+    }, .{ .gap = 0 });
+
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    const cursor = try tree.renderWithCursor(buffer.writer(std.testing.allocator), input, .{
+        .ansi = false,
+        .debug_cursor = true,
+    });
+
+    try std.testing.expectEqualStrings("ab|cd", buffer.items);
+    try std.testing.expectEqual(@as(?Cursor, .{ .x = 2, .y = 0 }), cursor);
+}
+
 test "tree writes structured json snapshots" {
     var tree = Tree.init(std.testing.allocator);
     defer tree.deinit();
@@ -1264,4 +1341,27 @@ test "renderModelJson falls back to plain text view models" {
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"kind\":\"text\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"layout\":{\"x\":0,\"y\":0,\"width\":14,\"height\":1}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "plain fallback") != null);
+}
+
+test "renderModelSnapshot returns frame bytes and semantic cursor" {
+    const Model = struct {
+        pub fn compose(_: *const @This(), tree: *Tree) !NodeId {
+            return tree.row(&.{
+                try tree.text("ab"),
+                try tree.cursor(.accent),
+                try tree.text("cd"),
+            }, .{ .gap = 0 });
+        }
+    };
+
+    var model = Model{};
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    const snapshot = try renderModelSnapshot(Model, std.testing.allocator, &model, &buffer, .{
+        .ansi = false,
+    });
+
+    try std.testing.expectEqualStrings("abcd", snapshot.frame);
+    try std.testing.expectEqual(@as(?Cursor, .{ .x = 2, .y = 0 }), snapshot.cursor);
 }

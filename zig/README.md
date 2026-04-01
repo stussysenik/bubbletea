@@ -6,6 +6,9 @@ This directory contains a Zig-first Bubble Tea rewrite prototype instead of a li
 
 <!-- toc:start -->
 - [Why this shape](#why-this-shape)
+- [Runtime Lifecycle Contract](#runtime-lifecycle-contract)
+- [Structured Snapshot Contract](#structured-snapshot-contract)
+- [Public API](#public-api)
 - [Optimization targets worth pushing further](#optimization-targets-worth-pushing-further)
 - [Stack recommendation](#stack-recommendation)
 - [Automation](#automation)
@@ -15,21 +18,23 @@ This directory contains a Zig-first Bubble Tea rewrite prototype instead of a li
 - [Build Web Host](#build-web-host)
 - [Serve Web Host](#serve-web-host)
 - [Test](#test)
+- [Build Docs](#build-docs)
 <!-- toc:end -->
 
 What is here:
 
 - A single-threaded event loop in [`src/tea.zig`](./src/tea.zig)
 - A headless runtime in [`src/headless.zig`](./src/headless.zig)
+- Shared lifecycle and host capability contracts in [`src/contract.zig`](./src/contract.zig)
 - A shared focus utility in [`src/focus.zig`](./src/focus.zig)
 - A composable cross-host view tree in [`src/ui.zig`](./src/ui.zig)
 - A stateful terminal input decoder in [`src/input.zig`](./src/input.zig) that handles keys, paste, focus, and SGR mouse events
 - Raw terminal setup and size polling in [`src/terminal.zig`](./src/terminal.zig)
-- A line-diff ANSI renderer in [`src/renderer.zig`](./src/renderer.zig) that also enables terminal protocols such as bracketed paste and focus reporting
+- A styled cell-buffer ANSI renderer in [`src/renderer.zig`](./src/renderer.zig) that also enables terminal protocols such as bracketed paste and focus reporting
 - Reusable components in [`src/components`](./src/components), including inspector, menu, text input, table, and form primitives
 - A shared showcase model in [`src/apps/showcase.zig`](./src/apps/showcase.zig)
 - A native showcase in [`examples/showcase/main.zig`](./examples/showcase/main.zig)
-- A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with resize, key, paste, focus, mouse, tick, and render entrypoints
+- A WASM export surface in [`src/wasm_showcase.zig`](./src/wasm_showcase.zig) with explicit init, resize, key, paste, focus, mouse, tick, and snapshot entrypoints
 - A static browser host in [`web`](./web) that drives the WASM build through a thin JavaScript bridge, consumes structured UI snapshots with measured layout bounds, supports region-aware focus targeting, and keeps the raw text frame available for debugging
 
 ## Why this shape
@@ -44,6 +49,78 @@ The Zig rewrite starts from different assumptions:
 - Make components plain Zig structs with direct method calls and no interface boxing.
 - Start from a headless state machine so the same model can target terminal, WASM, or service hosts.
 - Render a composable view tree instead of concatenating strings in every app.
+
+## Runtime Lifecycle Contract
+
+The shared lifecycle is now explicit:
+
+- Terminal hosts run `Program.run()`: host setup, initial resize, `init` once, first render, event loop, quit, teardown, return final model.
+- Headless hosts run `HeadlessProgram`: one initial resize is injected before `init`, `boot()` is idempotent, and quit freezes later mutation until `deinit()`.
+- WASM hosts must call `bt_init()` first. Other exports do not lazy-init anymore.
+- `bt_render_*` is debug text output. `bt_tree_*` is the authoritative browser-facing snapshot contract.
+- Snapshot pointers returned by the WASM bridge stay valid until the next successful mutating export.
+
+## Structured Snapshot Contract
+
+The shared UI tree in [`src/ui.zig`](./src/ui.zig) is the authoritative cross-host boundary.
+
+- Stable node kinds: `text`, `cursor`, `row`, `column`, `box`, `spacer`, `rule`
+- `layout` coordinates are measured in terminal cells
+- Semantic cursor nodes stay zero-width in authoritative snapshots
+- `region` and `action` metadata stay attached to the same nodes that hosts can target directly
+- Plain-text cursor placeholders are debug-only and must be opted into explicitly
+
+## Public API
+
+Import the package as:
+
+```zig
+const tea = @import("bubbletea_zig");
+```
+
+Recommended app-kit surface:
+
+- `tea.Program`, `tea.HeadlessProgram`
+- `tea.Message`, `tea.Cmd`, `tea.Update`, `tea.emit`, `tea.tickAfter`
+- `tea.FocusRing`, `tea.ui`, `tea.components`
+- `tea.contract`
+
+Advanced host/runtime surface:
+
+- `tea.input`, `tea.InputDecoder`, `tea.InputEvent`
+- `tea.renderer`, `tea.terminal`
+
+Example-only surface:
+
+- `tea.apps.showcase`
+
+Minimal app-kit usage:
+
+```zig
+const std = @import("std");
+const tea = @import("bubbletea_zig");
+
+const Msg = tea.Message(void);
+const Input = tea.components.TextInput(64);
+
+const Model = struct {
+    input: Input = Input.init(.{
+        .prompt = "demo> ",
+        .placeholder = "type here",
+    }),
+
+    pub fn update(self: *@This(), msg: Msg) !tea.Update(Msg) {
+        return switch (msg) {
+            .key => |key| if (self.input.update(key)) .{} else tea.Update(Msg).noop(),
+            else => tea.Update(Msg).noop(),
+        };
+    }
+
+    pub fn compose(self: *const @This(), tree: *tea.ui.Tree) !tea.ui.NodeId {
+        return self.input.compose(tree);
+    }
+};
+```
 
 ## Optimization targets worth pushing further
 
@@ -128,4 +205,11 @@ Then open `http://127.0.0.1:4173`.
 ```sh
 cd zig
 zig build test
+```
+
+## Build Docs
+
+```sh
+cd zig
+zig build docs
 ```

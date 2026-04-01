@@ -228,8 +228,10 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
             try self.pending.push(self.allocator, msg);
         }
 
-        /// Boots the terminal host, runs init hooks, and stays in the event
-        /// loop until the model requests quit.
+        /// Boots the terminal host, injects the first resize, runs `init`
+        /// exactly once, renders the first frame, and stays in the event loop
+        /// until the model requests quit. Once quit is requested, the host
+        /// tears down terminal state and returns the final model unchanged.
         pub fn run(self: *Self) !ModelType {
             if (self.options.use_raw_mode) {
                 try self.terminal.enableRawMode();
@@ -279,10 +281,13 @@ pub fn Program(comptime ModelType: type, comptime UserMsg: type) type {
         /// Renders the current model snapshot through either `compose` or
         /// `view`, then hands the frame to the terminal renderer.
         fn render(self: *Self) !void {
-            const cursor = try ui.renderModelWithCursor(ModelType, self.allocator, &self.model, &self.frame_buffer, .{
+            const snapshot = try ui.renderModelSnapshot(ModelType, self.allocator, &self.model, &self.frame_buffer, .{
                 .ansi = self.renderer.options.ansi_enabled,
             });
-            try self.renderer.render(self.frame_buffer.items, cursor);
+            try self.renderer.renderFrame(.{
+                .bytes = snapshot.frame,
+                .cursor = snapshot.cursor,
+            });
             self.dirty = false;
         }
 

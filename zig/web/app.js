@@ -387,7 +387,7 @@ function renderOutputs() {
   state.lastTreeJson = treeJson;
 
   try {
-    renderTree(JSON.parse(treeJson));
+    renderTree(parseTreeSnapshot(treeJson));
   } catch (error) {
     setRuntimeStatus(`tree parse failed: ${error.message}`);
   }
@@ -431,6 +431,12 @@ function clampCell(value, max) {
   return Math.max(0, Math.min(Math.max(0, max - 1), value));
 }
 
+function parseTreeSnapshot(treeJson) {
+  const snapshot = JSON.parse(treeJson);
+  validateNode(snapshot);
+  return snapshot;
+}
+
 // The DOM host deliberately mirrors the semantic Zig node types instead of
 // trying to parse the flattened text frame back into panels.
 function renderTree(snapshot) {
@@ -454,7 +460,7 @@ function buildTreeNode(node, metrics) {
     case "rule":
       return buildRuleNode(node, metrics);
     default:
-      return buildUnknownNode(node);
+      throw new Error(`unknown node kind: ${String(node.kind)}`);
   }
 }
 
@@ -548,13 +554,6 @@ function buildRuleNode(node, metrics) {
   element.className = `ui-node ui-rule tone-${node.tone}`;
   applyNodeLayout(element, node.layout, metrics, { exactWidth: true });
   element.textContent = node.glyph.repeat(Math.max(1, node.width));
-  return element;
-}
-
-function buildUnknownNode(node) {
-  const element = document.createElement("div");
-  element.className = "ui-node ui-text tone-warning";
-  element.textContent = `unknown node: ${node.kind}`;
   return element;
 }
 
@@ -663,4 +662,86 @@ function formatPadding(padding, metrics) {
   const bottom = linesToPixels(padding.bottom, metrics);
   const left = cellsToPixels(padding.left, metrics);
   return `${top} ${right} ${bottom} ${left}`;
+}
+
+function validateNode(node) {
+  if (!node || typeof node !== "object") {
+    throw new Error("snapshot node must be an object");
+  }
+  if (typeof node.kind !== "string") {
+    throw new Error("snapshot node is missing a string kind");
+  }
+  validateLayout(node.layout);
+
+  switch (node.kind) {
+    case "text":
+      if (typeof node.content !== "string") throw new Error("text node is missing content");
+      if (typeof node.tone !== "string") throw new Error("text node is missing tone");
+      if (typeof node.alignment !== "string") throw new Error("text node is missing alignment");
+      return;
+    case "cursor":
+      if (typeof node.tone !== "string") throw new Error("cursor node is missing tone");
+      return;
+    case "row":
+    case "column":
+      if (!Array.isArray(node.children)) throw new Error(`${node.kind} node is missing children`);
+      if (!Number.isInteger(node.gap) || node.gap < 0) throw new Error(`${node.kind} node has invalid gap`);
+      for (const child of node.children) validateNode(child);
+      return;
+    case "box":
+      if (node.title !== null && typeof node.title !== "string") throw new Error("box node has invalid title");
+      if (node.region !== null && typeof node.region !== "string") throw new Error("box node has invalid region");
+      if (typeof node.tone !== "string") throw new Error("box node is missing tone");
+      if (typeof node.alignment !== "string") throw new Error("box node is missing alignment");
+      if (typeof node.border !== "string") throw new Error("box node is missing border");
+      validatePadding(node.padding);
+      if (node.action !== null) validateAction(node.action);
+      validateNode(node.child);
+      return;
+    case "spacer":
+      if (!Number.isInteger(node.width) || node.width < 0) throw new Error("spacer node has invalid width");
+      if (!Number.isInteger(node.height) || node.height < 0) throw new Error("spacer node has invalid height");
+      return;
+    case "rule":
+      if (!Number.isInteger(node.width) || node.width < 0) throw new Error("rule node has invalid width");
+      if (typeof node.glyph !== "string" || node.glyph.length === 0) throw new Error("rule node has invalid glyph");
+      if (typeof node.tone !== "string") throw new Error("rule node is missing tone");
+      return;
+    default:
+      throw new Error(`unknown node kind: ${String(node.kind)}`);
+  }
+}
+
+function validateLayout(layout) {
+  if (!layout || typeof layout !== "object") {
+    throw new Error("snapshot node is missing layout");
+  }
+  for (const key of ["x", "y", "width", "height"]) {
+    if (!Number.isInteger(layout[key]) || layout[key] < 0) {
+      throw new Error(`snapshot layout has invalid ${key}`);
+    }
+  }
+}
+
+function validatePadding(padding) {
+  if (!padding || typeof padding !== "object") {
+    throw new Error("box node is missing padding");
+  }
+  for (const key of ["top", "right", "bottom", "left"]) {
+    if (!Number.isInteger(padding[key]) || padding[key] < 0) {
+      throw new Error(`box padding has invalid ${key}`);
+    }
+  }
+}
+
+function validateAction(action) {
+  if (!action || typeof action !== "object") {
+    throw new Error("box action must be an object");
+  }
+  if (typeof action.kind !== "string" || action.kind.length === 0) {
+    throw new Error("box action is missing kind");
+  }
+  if (!Number.isInteger(action.value) || action.value < 0) {
+    throw new Error("box action has invalid value");
+  }
 }

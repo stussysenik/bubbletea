@@ -3,7 +3,8 @@ const tea = @import("../tea.zig");
 const ui = @import("../ui.zig");
 
 /// Fixed-capacity UTF-8 text input that keeps editing logic allocation-free in
-/// the hot path.
+/// the hot path. Callers interact with UTF-8 byte slices, and the internal
+/// cursor also tracks UTF-8 byte boundaries rather than visual columns.
 pub fn TextInput(comptime capacity: usize) type {
     return struct {
         // The buffer stores UTF-8 bytes while `cursor` and `len` are byte
@@ -52,7 +53,8 @@ pub fn TextInput(comptime capacity: usize) type {
             self.cursor = 0;
         }
 
-        /// Replaces the current value with a caller-provided UTF-8 slice.
+        /// Replaces the current value with a caller-provided UTF-8 slice whose
+        /// byte length must fit inside the fixed capacity.
         pub fn setValue(self: *Self, text: []const u8) !void {
             if (text.len > capacity) return error.NoSpaceLeft;
             @memcpy(self.buffer[0..text.len], text);
@@ -60,7 +62,9 @@ pub fn TextInput(comptime capacity: usize) type {
             self.cursor = text.len;
         }
 
-        /// Inserts an entire UTF-8 slice at the current cursor location.
+        /// Inserts an entire UTF-8 slice at the current cursor location. The
+        /// insert succeeds only when the full byte slice is valid UTF-8 and
+        /// fits inside the fixed-capacity buffer.
         pub fn insertText(self: *Self, text: []const u8) bool {
             if (text.len == 0) return false;
             if (self.len + text.len > capacity) return false;
@@ -91,7 +95,8 @@ pub fn TextInput(comptime capacity: usize) type {
             return true;
         }
 
-        /// Applies editing and cursor-motion keys.
+        /// Applies editing and cursor-motion keys. Horizontal cursor movement
+        /// follows UTF-8 scalar boundaries, not terminal cell widths.
         pub fn update(self: *Self, key: tea.Key) bool {
             if (key.code == .character and key.event == .press and !key.modifiers.any()) {
                 return self.insertCodepoint(key.text);
@@ -307,7 +312,10 @@ test "text input compose shows prompt cursor and placeholder" {
     var buffer: std.ArrayList(u8) = .empty;
     defer buffer.deinit(std.testing.allocator);
 
-    try tree.render(buffer.writer(std.testing.allocator), root, .{ .ansi = false });
+    try tree.render(buffer.writer(std.testing.allocator), root, .{
+        .ansi = false,
+        .debug_cursor = true,
+    });
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "query> ") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "|") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "type here") != null);

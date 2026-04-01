@@ -38,8 +38,8 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             active: bool = true,
         };
 
-        /// Optional composition metadata for hosts that want direct field
-        /// targeting instead of replaying keyboard focus moves.
+        /// Optional host-integration metadata for callers that want direct
+        /// field targeting instead of replaying keyboard focus moves.
         pub const ComposeOptions = struct {
             field_action_kind: ?[]const u8 = null,
         };
@@ -82,7 +82,10 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             return null;
         }
 
-        /// Returns a mutable pointer to a field input.
+        /// Returns a mutable pointer to a field input. This is a low-level
+        /// escape hatch for advanced callers; the stable form contract is
+        /// built around `value*`, validation helpers, `update`, `paste`, and
+        /// `compose`.
         pub fn field(self: *Self, index: usize) *Input {
             return &self.inputs[index];
         }
@@ -181,8 +184,9 @@ pub fn Form(comptime field_count: usize, comptime capacity: usize) type {
             return self.composeWithOptions(tree, .{});
         }
 
-        /// Composes the form and optionally tags each field for direct host
-        /// actions such as browser-side field focusing.
+        /// Composes the form and optionally tags each field for direct
+        /// structured-host actions such as browser-side field focusing. Most
+        /// callers should use `compose()`.
         pub fn composeWithOptions(self: *const Self, tree: *ui.Tree, options: ComposeOptions) !ui.NodeId {
             if (field_count == 0) {
                 const empty = try tree.textStyled("(empty form)", .{ .tone = .muted });
@@ -327,6 +331,23 @@ test "form can compose browser action metadata per field" {
     try tree.writeJson(buffer.writer(std.testing.allocator), root);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"form_field\",\"value\":0}") != null);
     try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":\"form_field\",\"value\":1}") != null);
+}
+
+test "form compose stays host-agnostic by default" {
+    const DemoForm = Form(1, 32);
+    const form = DemoForm.init(.{
+        .{ .id = "name", .label = "Name" },
+    }, .{});
+
+    var tree = ui.Tree.init(std.testing.allocator);
+    defer tree.deinit();
+
+    const root = try form.compose(&tree);
+    var buffer: std.ArrayList(u8) = .empty;
+    defer buffer.deinit(std.testing.allocator);
+
+    try tree.writeJson(buffer.writer(std.testing.allocator), root);
+    try std.testing.expect(std.mem.indexOf(u8, buffer.items, "\"action\":{\"kind\":") == null);
 }
 
 test "form pastes into the focused field" {

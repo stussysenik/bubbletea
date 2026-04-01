@@ -1,6 +1,6 @@
 # Progress
 
-Generated from `automation/progress.json` on 2026-03-31.
+Generated from `automation/progress.json` on 2026-04-01.
 
 ## Contents
 <!-- toc:start -->
@@ -12,7 +12,7 @@ Generated from `automation/progress.json` on 2026-03-31.
 
 ## Overview
 
-A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The remaining rewrite phases are now also captured in OpenSpec.
+A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.
 
 - Status: `active`
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md), [OpenSpec](./openspec/README.md)
@@ -25,9 +25,9 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Core runtime | Done | Single-threaded update loop, deterministic command scheduling, and terminal host live in zig/src/tea.zig. |
-| Headless runtime | Done | A host-agnostic runtime exists in zig/src/headless.zig for automation, tests, and non-terminal adapters. |
-| Composable UI tree | Done | A view tree with rows, columns, boxes, rules, and spacers exists in zig/src/ui.zig. |
+| Core runtime | Done | Single-threaded update loop, deterministic command scheduling, and terminal host live in zig/src/tea.zig, now with an explicit lifecycle contract shared with headless and WASM hosts. |
+| Headless runtime | Done | A host-agnostic runtime exists in zig/src/headless.zig for automation, tests, and non-terminal adapters, with explicit init-once, initial-resize, structured-tree, and post-quit behavior. |
+| Composable UI tree | Done | A view tree with rows, columns, boxes, rules, spacers, stable structured snapshot kinds, and zero-width semantic cursor behavior exists in zig/src/ui.zig. |
 | Reusable components | Done | Spinner, list, badge, inspector, menu, progress bar, text input, table, and form components now live in zig/src/components, with text input now emitting a semantic cursor node instead of a literal caret glyph. |
 | Terminal styling | Done | The terminal renderer now respects view-tree tones through a styled cell buffer, handles wide glyphs safely, and can drive the real terminal cursor while headless and WASM renders stay plain. |
 | WASM host exports | Done | A freestanding WASM module with init, resize, key, paste, focus, mouse, tick, and render exports exists in zig/src/wasm_showcase.zig. |
@@ -49,6 +49,6 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 
 - Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.
 - Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.
-- Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.
+- Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the newly documented public app-kit surface.
 - Push region-aware hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.
 - Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes.

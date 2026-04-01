@@ -87,4 +87,19 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run Zig module tests");
     test_step.dependOn(&run_mod_tests.step);
+
+    // Package docs are part of the supported surface, so keep them buildable
+    // alongside the rest of the module.
+    const docs_lib = b.addLibrary(.{
+        .name = "bubbletea-zig-docs",
+        .linkage = .static,
+        .root_module = mod,
+    });
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs_lib.getEmittedDocs(),
+        .install_dir = .prefix,
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Build package docs");
+    docs_step.dependOn(&install_docs.step);
 }

@@ -2,7 +2,7 @@
   "project": {
     "name": "bubbletea-zig",
     "status": "active",
-    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The remaining rewrite phases are now also captured in OpenSpec.",
+    "summary": "A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal today, and now includes protocol-aware terminal input with Kitty keyboard support, a structured key model, a styled cell-buffer terminal renderer with wide-glyph handling and real cursor state, form-driven UI primitives, semantic cursor nodes, and a browser host that renders structured UI snapshots with measured layout bounds, region-aware focus targeting, item-level browser actions, and direct form-field targeting from the same WASM-backed runtime. The runtime lifecycle, UI snapshot boundary, and intended public app-kit surface are now explicitly frozen in code, docs, and OpenSpec.",
     "docs": {
       "readme": "./README.md",
       "zig_readme": "./zig/README.md",
@@ -34,17 +34,17 @@
     {
       "name": "Core runtime",
       "status": "done",
-      "details": "Single-threaded update loop, deterministic command scheduling, and terminal host live in zig/src/tea.zig."
+      "details": "Single-threaded update loop, deterministic command scheduling, and terminal host live in zig/src/tea.zig, now with an explicit lifecycle contract shared with headless and WASM hosts."
     },
     {
       "name": "Headless runtime",
       "status": "done",
-      "details": "A host-agnostic runtime exists in zig/src/headless.zig for automation, tests, and non-terminal adapters."
+      "details": "A host-agnostic runtime exists in zig/src/headless.zig for automation, tests, and non-terminal adapters, with explicit init-once, initial-resize, structured-tree, and post-quit behavior."
     },
     {
       "name": "Composable UI tree",
       "status": "done",
-      "details": "A view tree with rows, columns, boxes, rules, and spacers exists in zig/src/ui.zig."
+      "details": "A view tree with rows, columns, boxes, rules, spacers, stable structured snapshot kinds, and zero-width semantic cursor behavior exists in zig/src/ui.zig."
     },
     {
       "name": "Reusable components",
@@ -87,7 +87,7 @@
         "zig/src/headless.zig",
         "zig/src/terminal.zig"
       ],
-      "shipped": "Interactive and headless runtimes share one message/update model with deterministic timers and explicit terminal lifecycle management.",
+      "shipped": "Interactive and headless runtimes share one message/update model with deterministic timers, explicit first-resize/init rules, and defined post-quit behavior, while the WASM bridge now requires explicit initialization.",
       "next": "Fold platform event sources and richer host capabilities into the same runtime contract without borrowing Go’s goroutine-heavy shape."
     },
     {
@@ -108,7 +108,7 @@
         "zig/src/ui.zig",
         "zig/src/cell_width.zig"
       ],
-      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, semantic cursor nodes, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, tags interactive regions and item actions for browser hosts, and shares terminal-cell width logic for layout-sensitive text.",
+      "shipped": "The shared scene graph can render rows, columns, boxes, spacers, rules, semantic cursor nodes, and semantic tones across terminal, headless, and browser hosts, exposes measured layout bounds inside structured snapshots, keeps semantic cursors zero-width in authoritative snapshots, tags interactive regions and item actions for browser hosts, and shares terminal-cell width logic for layout-sensitive text.",
       "next": "Push the same metadata deeper into field-level interactions and richer layout metadata so hit testing, scrolling regions, and cross-host renderers can share more than terminal-sized boxes."
     },
     {
@@ -143,7 +143,7 @@
         "zig/build.zig",
         "zig/web"
       ],
-      "shipped": "The core now compiles to WASM, boots through a static browser shell, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes, can focus interactive showcase regions directly from browser hit testing, and can invoke tagged list/menu actions plus direct form-field focus while keeping the raw text frame for debugging.",
+      "shipped": "The core now compiles to WASM, boots through a static browser shell, requires explicit `bt_init`, accepts browser-driven resize, key, paste, focus, mouse, and timer calls, exposes structured UI snapshots with measured grid bounds and semantic cursor nodes as the primary browser contract, and keeps the raw text frame as debugging output.",
       "next": "Push region-aware hit testing deeper into cursor placement and richer DOM/SVG/Canvas rendering now that the browser host receives real node bounds from the Zig tree."
     },
     {
@@ -192,7 +192,7 @@
   "next": [
     "Finish protocol-heavy terminal features such as clipboard integration and layout-aware mouse hit testing on top of the shipped Kitty keyboard layer.",
     "Add tougher grapheme-cluster edge cases and terminal cursor shape/blink control on top of the new wide-glyph-safe cell-buffer renderer.",
-    "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the new form/focus layer.",
+    "Add first-class framework components for richer tables, command routing, and layout/styling primitives on top of the newly documented public app-kit surface.",
     "Push region-aware hit testing deeper so browser clicks can place cursors inside fields and target richer widget internals, not just panels and row-level actions.",
     "Keep landing incremental zig-scoped commits so semantic-release tags reflect real rewrite layers instead of mixed-purpose changes."
   ]
