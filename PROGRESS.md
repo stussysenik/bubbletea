@@ -18,7 +18,7 @@ A Zig-native Bubble Tea rewrite that starts headlessly, renders to terminal toda
 - Docs: [README](./README.md), [zig/README](./zig/README.md), [PROGRESS](./PROGRESS.md), [LAYERS](./LAYERS.md), [OpenSpec](./openspec/README.md)
 - Planning: [project](./openspec/project.md), [active change](./openspec/changes/rewrite-bubbletea-in-zig)
 - Release Strategy: semantic-release on main creates zig-v* tags and updates docs/changelog; artifact publishing for the Zig runtime is a separate next step.
-- Latest Zig Tag: `zig-v0.14.0`
+- Latest Zig Tag: `zig-v0.15.0`
 - Commit Style: Use Conventional Commits and prefer zig-focused scopes such as feat(zig), feat(zig/input), feat(zig/renderer), docs(zig), or chore(zig).
 
 ## Status Board
